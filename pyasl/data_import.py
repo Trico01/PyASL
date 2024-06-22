@@ -498,6 +498,7 @@ def read_asl_bids(root, img_type, has_structural):
 
 
 def load_data(root, params_json, convert=True):
+    root = os.path.abspath(root)
     valid, error, img_type, has_structural = check_bids_format(root)
     if not valid:
         raise ValueError(error)

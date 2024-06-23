@@ -334,10 +334,10 @@ def convert2bids(root, params, img_type, has_structural):
                 df = pd.DataFrame(tsv_data)
                 df.to_csv(tsv_path, sep="\t", index=False)
 
-                session_dict["asl"].append(os.path.join("perf", img_name + ".nii"))
+                session_dict["asl"].append(img_name)
             else:
                 if params["M0Type"] == "Separate":
-                    session_dict["M0"] = os.path.join("perf", img_name + ".nii")
+                    session_dict["M0"] = img_name
 
         if has_structural:
             anat_path = os.path.join(all_session_paths[i], "anat")
@@ -365,7 +365,7 @@ def convert2bids(root, params, img_type, has_structural):
                 json_path = os.path.join(anat_path_temp, img_name + ".json")
                 with open(json_path, "w") as json_file:
                     json.dump(structural_json_data, json_file, indent=4)
-            session_dict["anat"] = os.path.join("anat", img_name + ".nii")
+            session_dict["anat"] = img_name
 
         sessions_dict[all_session_paths[i]] = session_dict.copy()
 
@@ -436,7 +436,7 @@ def read_asl_bids(root, img_type, has_structural):
                     data_description_json = json_info.copy()
 
             if "M0" not in img_name:
-                session_dict["asl"].append(os.path.join("perf", img_name + ".nii"))
+                session_dict["asl"].append(img_name)
                 if not read_tsv_flag:
                     df = pd.read_csv(
                         os.path.join(perf_path, img_name + "_aslcontext.tsv"), sep="\t"
@@ -480,14 +480,14 @@ def read_asl_bids(root, img_type, has_structural):
                                 data_description_json["PLDList"].append(0)
                     read_tsv_flag = True
             else:
-                session_dict["M0"] = os.path.join("perf", img_name + ".nii")
+                session_dict["M0"] = img_name
 
         if has_structural:
             anat_path = os.path.join(all_session_paths[i], "anat")
             anat_images = [d for d in os.listdir(anat_path) if d.endswith((img_type))]
             anat_image = anat_images[0]
             img_name = os.path.splitext(anat_image)[0]
-            session_dict["anat"] = os.path.join("anat", img_name + ".nii")
+            session_dict["anat"] = img_name
 
         sessions_dict[all_session_paths[i]] = session_dict.copy()
     data_description_json["Images"] = sessions_dict.copy()

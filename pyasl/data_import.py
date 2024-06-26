@@ -158,8 +158,6 @@ def read_params(params_json):
         "EchoTime",
         "FlipAngle",
         "ArterialSpinLabelingType",
-        "PostLabelingDelay",
-        "LabelingDuration",
         "M0Type",
         "MRAcquisitionType",
         "BackgroundSuppression",
@@ -171,36 +169,58 @@ def read_params(params_json):
         if key not in params:
             return (False, f"Missing parameter: {key}", {})
 
+    if params["ArterialSpinLabelingType"] == "pCASL":
+        required_asl_keys = [
+            "PostLabelingDelay",
+            "LabelingDuration",
+        ]
+    elif params["ArterialSpinLabelingType"] == "PASL":
+        if params["SingleDelay"]:
+            required_asl_keys = ["TI1", "TI"]
+        else:
+            required_asl_keys = ["TI1", "TI", "Looklocker"]
+    for key in required_asl_keys:
+        if key not in params:
+            return (False, f"Missing parameter: {key}", {})
+
     if params["MRAcquisitionType"] == "2D":
         if "SliceDuration" not in params:
             return (False, "Missing parameter: SliceDuration", {})
 
+    if params["ArterialSpinLabelingType"] == "pCASL":
+        temp_value = params["PostLabelingDelay"]
+        temp_name = "PostLabelingDelay"
+    elif params["ArterialSpinLabelingType"] == "PASL":
+        temp_value = params["TI"]
+        temp_name = "TI"
+
     if not params["SingleDelay"]:
-        if not isinstance(params["PostLabelingDelay"], (list)):
+        if not isinstance(temp_value, (list)):
             return (
                 False,
-                "Invalid PostLabelingDelay: should be an array for multi-delay data",
+                f"Invalid {temp_name}: should be an array for multi-delay data",
                 {},
             )
     else:
         if params["M0Type"] != "Included":
-            if isinstance(params["PostLabelingDelay"], (list)):
+            if isinstance(temp_value, (list)):
                 return (
                     False,
-                    "Invalid PostLabelingDelay: should be a value for single-delay data",
+                    f"Invalid {temp_name}: should be a value for single-delay data",
                     {},
                 )
 
     if params["M0Type"] == "Included":
-        if not isinstance(params["PostLabelingDelay"], (list)):
-            return (False, "Invalid PostLabelingDelay: no M0 included", {})
-        if not (0 in params["PostLabelingDelay"]):
-            return (False, "Invalid PostLabelingDelay: no M0 included", {})
+        if not isinstance(temp_value, (list)):
+            return (False, f"Invalid {temp_name}: no M0 included", {})
+        if not (0 in temp_value):
+            return (False, f"Invalid {temp_name}: no M0 included", {})
 
     if params["BackgroundSuppression"]:
         required_bg_keys = [
             "BackgroundSuppressionNumberPulses",
             "BackgroundSuppressionPulseTime",
+            "BackgroundSuppressionEfficiency",
         ]
         for key in required_bg_keys:
             if key not in params:
@@ -225,8 +245,12 @@ def make_sidecar(params, num_volumes):
     structural_json_data = {key: params[key] for key in structural_keys}
 
     volume_type = []
-    if isinstance(params["PostLabelingDelay"], (list)):
-        for pld in params["PostLabelingDelay"]:
+    if params["ArterialSpinLabelingType"] == "pCASL":
+        temp_value = params["PostLabelingDelay"]
+    elif params["ArterialSpinLabelingType"] == "PASL":
+        temp_value = params["TI"]
+    if isinstance(temp_value, (list)):
+        for pld in temp_value:
             if pld == 0:
                 volume_type.append("m0scan")
             else:
@@ -282,14 +306,18 @@ def convert2bids(root, params, img_type, has_structural):
                 nii_image = nii_file.get_fdata()
                 num_volumes = nii_image.shape[-1]
 
-            if isinstance(params["PostLabelingDelay"], (list)):
-                if num_volumes != (
-                    2 * len(params["PostLabelingDelay"])
-                    - params["PostLabelingDelay"].count(0)
-                ):
+            if params["ArterialSpinLabelingType"] == "pCASL":
+                temp_value = params["PostLabelingDelay"]
+                temp_name = "PostLabelingDelay"
+            elif params["ArterialSpinLabelingType"] == "PASL":
+                temp_value = params["TI"]
+                temp_name = "TI"
+
+            if isinstance(temp_value, (list)):
+                if num_volumes != (2 * len(temp_value) - temp_value.count(0)):
                     return (
                         False,
-                        "Number of volumes in ASL image does not match PostLabelingDelay parameter",
+                        f"Number of volumes in ASL image does not match {temp_name} parameter",
                     )
 
     asl_json_data, structural_json_data, tsv_data = make_sidecar(params, num_volumes)
@@ -376,8 +404,12 @@ def convert2bids(root, params, img_type, has_structural):
     data_description_json["Images"] = sessions_dict.copy()
     data_description_json["ASLContext"] = tsv_data["volume_type"].copy()
     data_description_json["PLDList"] = []
-    if isinstance(params["PostLabelingDelay"], (list)):
-        PLD_temp = [pld for pld in params["PostLabelingDelay"] if pld != 0]
+    if params["ArterialSpinLabelingType"] == "pCASL":
+        temp_value = params["PostLabelingDelay"]
+    elif params["ArterialSpinLabelingType"] == "PASL":
+        temp_value = params["TI"]
+    if isinstance(temp_value, (list)):
+        PLD_temp = [pld for pld in temp_value if pld != 0]
         i = 0
         for volume_type in tsv_data["volume_type"]:
             if volume_type == "label":
@@ -388,7 +420,7 @@ def convert2bids(root, params, img_type, has_structural):
     else:
         for volume_type in tsv_data["volume_type"]:
             if volume_type == "label":
-                data_description_json["PLDList"].append(params["PostLabelingDelay"])
+                data_description_json["PLDList"].append(temp_value)
             else:
                 data_description_json["PLDList"].append(0)
 
@@ -434,6 +466,10 @@ def read_asl_bids(root, img_type, has_structural):
                 with open(json_path, "r") as json_file:
                     json_info = json.load(json_file)
                     data_description_json = json_info.copy()
+                if data_description_json["ArterialSpinLabelingType"] == "pCASL":
+                    temp_value = data_description_json["PostLabelingDelay"]
+                elif data_description_json["ArterialSpinLabelingType"] == "PASL":
+                    temp_value = data_description_json["TI"]
 
             if "M0" not in img_name:
                 session_dict["asl"].append(img_name)
@@ -451,12 +487,8 @@ def read_asl_bids(root, img_type, has_structural):
                             data_description_json["LabelControl"] = False
                             break
                     data_description_json["PLDList"] = []
-                    if isinstance(data_description_json["PostLabelingDelay"], (list)):
-                        PLD_temp = [
-                            pld
-                            for pld in data_description_json["PostLabelingDelay"]
-                            if pld != 0
-                        ]
+                    if isinstance(temp_value, (list)):
+                        PLD_temp = [pld for pld in temp_value if pld != 0]
                         PLD_unique = list(set(PLD_temp))
                         if len(PLD_unique) == 1:
                             data_description_json["SingleDelay"] = True
@@ -473,9 +505,7 @@ def read_asl_bids(root, img_type, has_structural):
                         data_description_json["SingleDelay"] = True
                         for item in volume_type:
                             if item == "label":
-                                data_description_json["PLDList"].append(
-                                    data_description_json["PostLabelingDelay"]
-                                )
+                                data_description_json["PLDList"].append(temp_value)
                             else:
                                 data_description_json["PLDList"].append(0)
                     read_tsv_flag = True

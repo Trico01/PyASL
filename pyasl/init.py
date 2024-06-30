@@ -1,10 +1,10 @@
 from .data_import import load_data
+from .asl_process import asl_pipeline
 
 # from .structural_module import process_structural_data
-# from .asl_module import process_asl_data
 
 __all__ = [
     "load_data",
+    "asl_pipeline",
     # "process_structural_data",
-    # "process_asl_data"
 ]

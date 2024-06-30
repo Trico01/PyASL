@@ -1,9 +1,9 @@
 import os
+import glob
 import numpy as np
 import nibabel as nib
 import json
 from nipype.interfaces import spm
-from nipype.interfaces.matlab import MatlabCommand
 from scipy.ndimage import binary_fill_holes, binary_erosion, binary_dilation, label
 from skimage.morphology import ball
 from scipy.optimize import curve_fit
@@ -62,10 +62,10 @@ def img_rescale(source_path, target_path):
     data = data / ss / ss
 
     rescaled_img = nib.Nifti1Image(data, img.affine, img.header)
-    rescaled_img.header["desrip"] = "4D rescaled images"
     rescaled_img.set_data_dtype(np.float32)
     rescaled_img.header["scl_slope"] = 1
     rescaled_img.header["scl_inter"] = 0
+    rescaled_img.header["descrip"] = "4D rescaled images"
 
     rescaled_img.to_filename(target_path)
 
@@ -96,20 +96,15 @@ def asl_realign(data_descrip):
             realign.inputs.quality = 0.9  # SPM default
             realign.inputs.fwhm = 5
             realign.inputs.register_to_mean = False  # realign to the first timepoint
-            realign_result = realign.run()  # realign_result not necessary
-            print("Realign generated files:", realign_result.outputs)
-
-            reslice = spm.Reslice()
-            reslice.inputs.in_files = P
-            reslice.inputs.interp = 4  # SPM default
-            reslice.inputs.wrap = [0, 0, 0]  # SPM default
-            reslice.inputs.mask = True
-            reslice.inputs.write_which = [
+            realign.inputs.jobtype = "estwrite"
+            realign.inputs.interp = 4  # SPM default
+            realign.inputs.wrap = [0, 0, 0]  # SPM default
+            realign.inputs.write_mask = True
+            realign.inputs.write_which = [
                 2,
                 1,
             ]  # which_writerealign = 2, mean_writerealign = 1
-            reslice_result = reslice.run()  # reslice_result not necessary
-            print("Reslice generated files:", reslice_result.outputs)
+            realign.run()
 
 
 def asl_calculate_diffmap(data_descrip):
@@ -119,9 +114,9 @@ def asl_calculate_diffmap(data_descrip):
         key = key.replace("rawdata", "derivatives")
         for asl_file in value["asl"]:
             if data_descrip["SingleDelay"]:
-                P = os.path.join(key, "perf", f"r{asl_file}.nii")  # check
+                P = os.path.join(key, "perf", f"r{asl_file}.nii")
             else:
-                P = os.path.join(key, "perf", f"{asl_file.nii}")
+                P = os.path.join(key, "perf", f"{asl_file}.nii")
             img, data = load_img(P)
             num_pairs = 0
             ctrl = np.zeros(data.shape[:3])
@@ -140,13 +135,13 @@ def asl_calculate_diffmap(data_descrip):
             header = img.header.copy()
             header.set_data_dtype(np.float32)
             header["dim"] = [3] + list(ctrl.shape) + [1] * 4
-            header["pixdim"] = header["pixdim"][:4] + [1] * 4
+            header["pixdim"] = list(header["pixdim"][:4]) + [1] * 4
             ctrl_img = nib.Nifti1Image(ctrl, affine, header)
             labl_img = nib.Nifti1Image(labl, affine, header)
             diff_img = nib.Nifti1Image(diff, affine, header)
-            ctrl_img.header["desrip"] = "3D control image"
-            labl_img.header["desrip"] = "3D label image"
-            diff_img.header["desrip"] = "3D difference image"
+            ctrl_img.header["descrip"] = "3D control image"
+            labl_img.header["descrip"] = "3D label image"
+            diff_img.header["descrip"] = "3D difference image"
 
             ctrl_img.to_filename(os.path.join(key, "perf", f"r{asl_file}_ctrl.nii"))
             labl_img.to_filename(os.path.join(key, "perf", f"r{asl_file}_labl.nii"))
@@ -177,7 +172,7 @@ def asl_coreg(target, source):
     coreg.inputs.write_interp = 1  # trilinear
     coreg.inputs.write_wrap = [0, 0, 0]
     coreg.inputs.write_mask = False
-    coreg.inputs.write_prefix = "r"
+    coreg.inputs.out_prefix = "r"
 
     coreg.run()
 
@@ -229,7 +224,7 @@ def asl_getBrainMask(imgtpm, imgfile, flag_addrealignmsk):
     matsiz = imgvol.shape
     voxsiz = np.abs(V.affine.diagonal()[:3])
     fov = np.multiply(matsiz, voxsiz)
-    flag_small_fov = (np.sum(fov < 80) > 0) or (np.sum(matsiz < 9) > 0)
+    flag_small_fov = (np.sum(fov < 80) > 0) or (np.sum(np.array(matsiz) < 9) > 0)
 
     P1 = None
     for item in os.listdir(imgpath):
@@ -246,26 +241,21 @@ def asl_getBrainMask(imgtpm, imgfile, flag_addrealignmsk):
         segment.inputs.channel_files = imgfile
         segment.inputs.channel_info = (0.001, 60, (False, False))
         segment.inputs.tissues = [
-            ((imgtpm, 1), 1, (1, 0), (0, 0)),
-            ((imgtpm, 2), 1, (1, 0), (0, 0)),
-            ((imgtpm, 3), 2, (1, 0), (0, 0)),
-            ((imgtpm, 4), 3, (0, 0), (0, 0)),
-            ((imgtpm, 5), 4, (0, 0), (0, 0)),
-            ((imgtpm, 6), 2, (0, 0), (0, 0)),
+            ((imgtpm, 1), 1, (True, False), (False, False)),
+            ((imgtpm, 2), 1, (True, False), (False, False)),
+            ((imgtpm, 3), 2, (True, False), (False, False)),
+            ((imgtpm, 4), 3, (False, False), (False, False)),
+            ((imgtpm, 5), 4, (False, False), (False, False)),
+            ((imgtpm, 6), 2, (False, False), (False, False)),
         ]
-        segment.inputs.warp_mrf = 1
-        segment.inputs.warp_cleanup = 1
-        segment.inputs.warp_reg = (0, 0.001, 0.5, 0.05, 0.2)
-        segment.inputs.warp_affreg = "mni"
-        segment.inputs.warp_fwhm = 0
-        segment.inputs.warp_samp = 3
-        segment.inputs.warp_write = [False, False]
+        segment.inputs.warping_regularization = [0, 0.001, 0.5, 0.05, 0.2]
+        segment.inputs.affine_regularization = "mni"
+        segment.inputs.sampling_distance = 3
+        segment.inputs.write_deformation_fields = [False, False]
 
         segment.run()
 
-        imgpath = os.path.dirname(imgfile)
-        P = segment.result.outputs.native_class_images
-        P = [p for p in P if os.path.basename(p).startswith("c")]
+        P = glob.glob(os.path.join(imgpath, f"c*{filename}"))
         V = [nib.load(p) for p in P[:3]]
         mvol = np.stack([v.get_fdata() for v in V], axis=-1)
         mask = np.sum(mvol, axis=-1)
@@ -328,7 +318,7 @@ def asl_calculate_M0(data_descrip, t1_tissue):
                 header = V_m0.header.copy()
                 header.set_data_dtype(np.float32)
                 header["dim"] = [3] + list(m0map.shape) + [1] * 4
-                header["pixdim"] = header["pixdim"][:4] + [1] * 4
+                header["pixdim"] = list(header["pixdim"][:4]) + [1] * 4
                 m0map_img = nib.Nifti1Image(m0map, V_m0.affine, header)
                 m0siz = m0map.shape
                 m0path = os.path.join(key, "perf", "M0ave.nii")
@@ -347,7 +337,7 @@ def asl_calculate_M0(data_descrip, t1_tissue):
                 header = V.header.copy()
                 header.set_data_dtype(np.float32)
                 header["dim"] = [3] + list(m0map.shape) + [1] * 4
-                header["pixdim"] = header["pixdim"][:4] + [1] * 4
+                header["pixdim"] = list(header["pixdim"][:4]) + [1] * 4
                 m0map_img = nib.Nifti1Image(m0map, V.affine, header)
 
                 m0siz = m0map.shape
@@ -355,7 +345,7 @@ def asl_calculate_M0(data_descrip, t1_tissue):
                 m0map_img.to_filename(m0path)
 
             if np.array_equal(ctrlsiz, m0siz):
-                target = os.path.join(key, "perf", f"mean{asl_file}.nii")  # check
+                target = os.path.join(key, "perf", f"mean{asl_file}.nii")
                 asl_coreg(target, m0path)
 
                 P_rm0 = os.path.join(key, "perf", "rM0ave.nii")
@@ -555,7 +545,7 @@ def asl_multidelay_calculate_M0(data_descrip):
                 header = V_m0.header.copy()
                 header.set_data_dtype(np.float32)
                 header["dim"] = [3] + list(m0map.shape) + [1] * 4
-                header["pixdim"] = header["pixdim"][:4] + [1] * 4
+                header["pixdim"] = list(header["pixdim"][:4]) + [1] * 4
                 m0map_img = nib.Nifti1Image(m0map, V_m0.affine, header)
                 m0path = os.path.join(key, "perf", "M0ave.nii")
                 m0map_img.to_filename(m0path)
@@ -573,7 +563,7 @@ def asl_multidelay_calculate_M0(data_descrip):
                 header = V.header.copy()
                 header.set_data_dtype(np.float32)
                 header["dim"] = [3] + list(m0map.shape) + [1] * 4
-                header["pixdim"] = header["pixdim"][:4] + [1] * 4
+                header["pixdim"] = list(header["pixdim"][:4]) + [1] * 4
                 m0map_img = nib.Nifti1Image(m0map, V.affine, header)
                 m0path = os.path.join(key, "perf", "M0ave.nii")
                 m0map_img.to_filename(m0path)
@@ -735,7 +725,8 @@ def asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, labl_eff, part_coef)
             brnmsk_dspl = brnmsk_dspl.astype(bool)
             brnmsk_clcu = brnmsk_clcu.astype(bool)
 
-            ctrl = [], labl = []
+            ctrl = []
+            labl = []
             for i, volume_type in enumerate(data_descrip["ASLContext"]):
                 if volume_type == "label":
                     labl.append(img_all[:, :, :, i])
@@ -785,7 +776,12 @@ def asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, labl_eff, part_coef)
                         xdata = plds + (islc - 1) * data_descrip["SliceDuration"] / 1000
                     ydata = ndiff[np.ravel_multi_index(ivox, brnmsk_dspl.shape), :]
                     beta1, _ = curve_fit(
-                        ff, xdata, ydata, p0=beta_init, bounds=(lowb, uppb)
+                        ff,
+                        xdata,
+                        ydata,
+                        p0=beta_init,
+                        bounds=(lowb, uppb),
+                        maxfev=10000,
                     )
                     cbfmap[ivox] = beta1[0]
                     attmap[ivox] = beta1[1] * 1000
@@ -839,14 +835,6 @@ def asl_pipeline(root, t1_tissue, t1_blood, labl_eff, part_coef):
     data_descrip = read_data_description(root)
     create_derivatives_folders(data_descrip)
     asl_rescale(data_descrip)
-
-    # check important
-    # MatlabCommand.set_default_matlab_cmd("matlab -nodesktop -nosplash")
-    # MatlabCommand.set_default_paths("E:/toolbox/spm12/spm12")
-    # t1_tissue = 1165
-    # t1_blood = 1650
-    # labl_eff = 0.98
-    # part_coef = 0.9
 
     if data_descrip["SingleDelay"]:
         asl_realign(data_descrip)

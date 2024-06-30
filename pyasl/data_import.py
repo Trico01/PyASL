@@ -179,9 +179,9 @@ def read_params(params_json):
             required_asl_keys = ["TI1", "TI"]
         else:
             required_asl_keys = ["TI1", "TI", "Looklocker"]
-    for key in required_asl_keys:
-        if key not in params:
-            return (False, f"Missing parameter: {key}", {})
+        for key in required_asl_keys:
+            if key not in params:
+                return (False, f"Missing parameter: {key}", {})
 
     if params["MRAcquisitionType"] == "2D":
         if "SliceDuration" not in params:

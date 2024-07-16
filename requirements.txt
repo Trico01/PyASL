@@ -1,2 +1,6 @@
+numpy
 nibabel
+nipype
+scipy
+scikit-image
 pandas

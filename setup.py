@@ -7,12 +7,15 @@ setup(
     install_requires=[
         "numpy",
         "nibabel",
+        "nipype",
         "scipy",
+        "scikit-image",
+        "pandas",
     ],
     author="Trico",
     author_email="trico010725@gmail.com",
     description="A library for processing ASL MRI data",
-    long_description=open('README.md').read(),
+    long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     # url="https://github.com/yourusername/pyasl",
 )

@@ -5,7 +5,7 @@ import nibabel as nib
 import pandas as pd
 
 
-def check_bids_format(root):
+def check_bids_format(root: str):
     """
     Check if the given rootpath follows the BIDS format.
 
@@ -131,7 +131,7 @@ def check_bids_format(root):
     return (True, "", img_type, has_structural)
 
 
-def read_params(params_json):
+def read_params(params_json: str):
     try:
         with open(params_json, "r") as json_file:
             params = json.load(json_file)
@@ -229,7 +229,7 @@ def read_params(params_json):
     return (True, "", params)
 
 
-def make_sidecar(params, num_volumes):
+def make_sidecar(params: dict, num_volumes: int):
     asl_json_data = params.copy()
     asl_json_data.pop("LabelControl")
     asl_json_data.pop("SingleDelay")
@@ -272,7 +272,7 @@ def make_sidecar(params, num_volumes):
     return asl_json_data, structural_json_data, tsv_data
 
 
-def convert2bids(root, params, img_type, has_structural):
+def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
     source_path = os.path.join(root, "rawdata")
     all_session_paths = []
     num_volumes = 0
@@ -430,7 +430,7 @@ def convert2bids(root, params, img_type, has_structural):
     return (True, "")
 
 
-def read_asl_bids(root, img_type, has_structural):
+def read_asl_bids(root: str, img_type: str, has_structural: bool):
     data_description_json = {}
     read_tsv_flag = False
 
@@ -527,7 +527,43 @@ def read_asl_bids(root, img_type, has_structural):
         json.dump(data_description_json, json_file, indent=4)
 
 
-def load_data(root, params_json, convert=True):
+def read_data_description(root: str):
+    description_file = os.path.join(root, "data_description.json")
+
+    try:
+        with open(description_file, "r") as f:
+            data_descrip = json.load(f)
+    except FileNotFoundError:
+        raise ValueError(f"{description_file} not found.")
+    except json.JSONDecodeError:
+        raise ValueError(f"Failed to decode JSON from {description_file}.")
+
+    return data_descrip
+
+
+def create_derivatives_folders(data_descrip: dict):
+    for key, value in data_descrip["Images"].items():
+        der_path = key.replace("rawdata", "derivatives")
+        try:
+            os.makedirs(der_path, exist_ok=True)
+        except OSError:
+            raise OSError(f"Could not create directories: {der_path}.")
+
+        der_perf_path = os.path.join(der_path, "perf")
+        try:
+            os.makedirs(der_perf_path, exist_ok=True)
+        except OSError:
+            raise OSError(f"Could not create directory: {der_perf_path}.")
+
+        if value["anat"]:
+            der_anat_path = os.path.join(der_path, "anat")
+            try:
+                os.makedirs(der_anat_path, exist_ok=True)
+            except OSError:
+                raise OSError(f"Could not create directory: {der_anat_path}.")
+
+
+def load_data(root: str, params_json: str, convert=True):
     root = os.path.abspath(root)
     valid, error, img_type, has_structural = check_bids_format(root)
     if not valid:
@@ -548,5 +584,8 @@ def load_data(root, params_json, convert=True):
     else:
         read_asl_bids(root, img_type, has_structural)
         print("Load compelete!")
+
+    data_descrip = read_data_description(root)
+    create_derivatives_folders(data_descrip)
 
     print(f"Please see data_description.json under {root} for details.")

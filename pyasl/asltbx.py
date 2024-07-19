@@ -19,28 +19,6 @@ def read_data_description(root: str):
     return data_descrip
 
 
-def create_derivatives_folders(data_descrip: dict):
-    for key, value in data_descrip["Images"].items():
-        der_path = key.replace("rawdata", "derivatives")
-        try:
-            os.makedirs(der_path, exist_ok=True)
-        except OSError:
-            raise OSError(f"Could not create directories: {der_path}.")
-
-        der_perf_path = os.path.join(der_path, "perf")
-        try:
-            os.makedirs(der_perf_path, exist_ok=True)
-        except OSError:
-            raise OSError(f"Could not create directory: {der_perf_path}.")
-
-        if value["anat"]:
-            der_anat_path = os.path.join(der_path, "anat")
-            try:
-                os.makedirs(der_anat_path, exist_ok=True)
-            except OSError:
-                raise OSError(f"Could not create directory: {der_anat_path}.")
-
-
 def load_img(P: str):
     V = nib.load(P)
     data = V.get_fdata()
@@ -494,7 +472,6 @@ def perf_subtract(
 
 def asltbx_pipeline(root: str, smooth_fwhm=[6, 6, 6]):
     data_descrip = read_data_description(root)
-    create_derivatives_folders(data_descrip)
     reset_orientation(data_descrip)
     realign(data_descrip)
     coregister(data_descrip)

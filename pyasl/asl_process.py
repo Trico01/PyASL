@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import numpy as np
 import nibabel as nib
@@ -9,7 +10,7 @@ from skimage.morphology import ball
 from scipy.optimize import curve_fit
 
 
-def read_data_description(root):
+def read_data_description(root: str):
     description_file = os.path.join(root, "data_description.json")
 
     try:
@@ -23,29 +24,7 @@ def read_data_description(root):
     return data_descrip
 
 
-def create_derivatives_folders(data_descrip):
-    for key, value in data_descrip["Images"].items():
-        der_path = key.replace("rawdata", "derivatives")
-        try:
-            os.makedirs(der_path, exist_ok=True)
-        except OSError:
-            raise OSError(f"Could not create directories: {der_path}.")
-
-        der_perf_path = os.path.join(der_path, "perf")
-        try:
-            os.makedirs(der_perf_path, exist_ok=True)
-        except OSError:
-            raise OSError(f"Could not create directory: {der_perf_path}.")
-
-        if value["anat"]:
-            der_anat_path = os.path.join(der_path, "anat")
-            try:
-                os.makedirs(der_anat_path, exist_ok=True)
-            except OSError:
-                raise OSError(f"Could not create directory: {der_anat_path}.")
-
-
-def load_img(P):
+def load_img(P: str):
     V = nib.load(P)
     data = V.get_fdata()
     data = np.nan_to_num(data)
@@ -53,7 +32,7 @@ def load_img(P):
     return V, data
 
 
-def img_rescale(source_path, target_path):
+def img_rescale(source_path: str, target_path: str):
     img, data = load_img(source_path)
     header = img.header
 
@@ -83,7 +62,7 @@ def asl_rescale(data_descrip):
             img_rescale(m0_path, m0_der_path)
 
 
-def asl_realign(data_descrip):
+def asl_realign(data_descrip: dict):
     print("pyasl: Realign ASL data...")
 
     for key, value in data_descrip["Images"].items():
@@ -107,7 +86,7 @@ def asl_realign(data_descrip):
             realign.run()
 
 
-def asl_calculate_diffmap(data_descrip):
+def asl_calculate_diffmap(data_descrip: dict):
     print("pyasl: Calculate difference volume...")
 
     for key, value in data_descrip["Images"].items():
@@ -148,7 +127,7 @@ def asl_calculate_diffmap(data_descrip):
             diff_img.to_filename(os.path.join(key, "perf", f"r{asl_file}_diff.nii"))
 
 
-def asl_coreg(target, source):
+def asl_coreg(target: str, source: str, other=[]):
     coreg = spm.Coregister()
     coreg.inputs.target = target
     coreg.inputs.source = source
@@ -174,10 +153,13 @@ def asl_coreg(target, source):
     coreg.inputs.write_mask = False
     coreg.inputs.out_prefix = "r"
 
+    if len(other):
+        coreg.inputs.apply_to_files = other
+
     coreg.run()
 
 
-def inbrain(imgvol, thre, ero_lyr, dlt_lyr):
+def inbrain(imgvol: np.ndarray, thre: float, ero_lyr: int, dlt_lyr: int):
     lowb = 0.25
     highb = 0.75
 
@@ -218,7 +200,7 @@ def inbrain(imgvol, thre, ero_lyr, dlt_lyr):
     return brainmask
 
 
-def asl_getBrainMask(imgtpm, imgfile, flag_addrealignmsk):
+def asl_getBrainMask(imgtpm: str, imgfile: str, flag_addrealignmsk: bool):
     imgpath, filename = os.path.split(imgfile)
     V, imgvol = load_img(imgfile)
     matsiz = imgvol.shape
@@ -278,7 +260,7 @@ def asl_getBrainMask(imgtpm, imgfile, flag_addrealignmsk):
     return brnmsk_dspl, brnmsk_clcu
 
 
-def bgs_factor(mz0, t1_tissue, flip, timing, inv_eff):
+def bgs_factor(mz0: float, t1_tissue: float, flip: list, timing: list, inv_eff: float):
     mz = mz0
     for ii in range(len(flip) - 1):
         slot = np.arange(1, timing[ii + 1] - timing[ii] + 1)
@@ -293,7 +275,7 @@ def bgs_factor(mz0, t1_tissue, flip, timing, inv_eff):
     return mz
 
 
-def asl_calculate_M0(data_descrip, t1_tissue):
+def asl_calculate_M0(data_descrip: dict, t1_tissue: float):
     print("pyasl: Calculate M0...")
 
     current_dir = os.path.dirname(__file__)
@@ -423,7 +405,9 @@ def asl_calculate_M0(data_descrip, t1_tissue):
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
-def asl_calculate_CBF(data_descrip, t1_blood, labl_eff, part_coef):
+def asl_calculate_CBF(
+    data_descrip: dict, t1_blood: float, labl_eff: float, part_coef: float
+):
     print("pyasl: Calculate CBF...")
 
     for key, value in data_descrip["Images"].items():
@@ -497,7 +481,9 @@ def asl_calculate_CBF(data_descrip, t1_blood, labl_eff, part_coef):
             )
 
 
-def asl_func_recover(m0, t1, tp, flip_angle=None, m_init=None):
+def asl_func_recover(
+    m0: float, t1: float, tp: np.ndarray, flip_angle=None, m_init=None
+):
     if flip_angle is not None and m_init is not None:
         # Look-Locker T1 recovery model
         tis_tmp = np.unique(tp)
@@ -519,7 +505,7 @@ def asl_func_recover(m0, t1, tp, flip_angle=None, m_init=None):
     return mm
 
 
-def asl_multidelay_calculate_M0(data_descrip):
+def asl_multidelay_calculate_M0(data_descrip: dict):
     print("pyasl: Calculate M0...")
 
     current_dir = os.path.dirname(__file__)
@@ -648,7 +634,9 @@ def asl_multidelay_calculate_M0(data_descrip):
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
-def asl_func_gkm_pcasl_multidelay(cbf, att, casl_dur, plds, paras):
+def asl_func_gkm_pcasl_multidelay(
+    cbf: float, att: float, casl_dur: float, plds: np.ndarray, paras: dict
+):
     t1_blood = paras["t1_blood"]
     part_coef = paras["part_coef"]
     labl_eff = paras["labl_eff"]
@@ -673,7 +661,14 @@ def asl_func_gkm_pcasl_multidelay(cbf, att, casl_dur, plds, paras):
     return mm
 
 
-def asl_func_gkm_pasl_looklocker(cbf, att, pasl_dur, tis, flip_angle, paras):
+def asl_func_gkm_pasl_looklocker(
+    cbf: float,
+    att: float,
+    pasl_dur: float,
+    tis: np.ndarray,
+    flip_angle: float,
+    paras: dict,
+):
     t1_blood = paras["t1_blood"]
     part_coef = paras["part_coef"]
     labl_eff = paras["labl_eff"]
@@ -712,7 +707,9 @@ def asl_func_gkm_pasl_looklocker(cbf, att, pasl_dur, tis, flip_angle, paras):
     return mm
 
 
-def asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, labl_eff, part_coef):
+def asl_multidelay_calculate_CBFATT(
+    data_descrip: dict, t1_blood: float, labl_eff: float, part_coef: float
+):
     print("pyasl: Calculate CBF and ATT...")
 
     for key, value in data_descrip["Images"].items():
@@ -819,21 +816,229 @@ def asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, labl_eff, part_coef)
             affine = V_m0map.affine.copy()
             acbf_img = nib.Nifti1Image(cbfmap, affine, header)
             acbf_img.to_filename(
-                os.path.join(key, "perf", f"r{asl_file}_aCBF_native.nii")
+                os.path.join(key, "perf", f"{asl_file}_aCBF_native.nii")
             )
             rcbf_img = nib.Nifti1Image(rcbfmap, affine, header)
             rcbf_img.to_filename(
-                os.path.join(key, "perf", f"r{asl_file}_rCBF_native.nii")
+                os.path.join(key, "perf", f"{asl_file}_rCBF_native.nii")
             )
             att_img = nib.Nifti1Image(attmap, affine, header)
-            att_img.to_filename(
-                os.path.join(key, "perf", f"r{asl_file}_ATT_native.nii")
+            att_img.to_filename(os.path.join(key, "perf", f"{asl_file}_ATT_native.nii"))
+
+
+def read_mpr(data_descrip: dict):
+    for key, value in data_descrip["Images"].items():
+        key_der = key.replace("rawdata", "derivatives")
+        if not value["anat"]:
+            raise ValueError("Missing structural images for multi-atlas analysis.")
+        anat_path = os.path.join(key_der, "anat")
+        entries = os.listdir(anat_path)
+        directories = [
+            entry for entry in entries if os.path.isdir(os.path.join(anat_path, entry))
+        ]
+        mpr_folder = None
+        mpr_name = None
+        for dir in directories:
+            if os.path.exists(os.path.join(anat_path, dir, "mni.imgsize")):
+                mpr_folder = dir
+                regex = re.compile(r"^(?!mni).+\.imgsize$")
+                files = [
+                    f
+                    for f in os.listdir(os.path.join(anat_path, dir))
+                    if re.match(regex, f)
+                ]
+                mpr_file = files[0]
+                mpr_name = mpr_file[:-8]
+                break
+        if mpr_folder is None:
+            raise ValueError("Missing parcellation folder for multi-atlas analysis.")
+        data_descrip["Images"][key]["mpr_folder"] = mpr_folder
+        data_descrip["Images"][key]["mpr_name"] = mpr_name
+
+    return data_descrip
+
+
+def read_roi_lookup_table(roi_lookup_file: str):
+    with open(roi_lookup_file, "r") as file:
+        titles = file.readline()
+        data = [line.split() for line in file]
+    return data
+
+
+def asl_skullstrip(path_mpr: str, name_mpr: str):
+    mVol, mpr = load_img(os.path.join(path_mpr, f"{name_mpr}.img"))
+    roi_lookup_all = read_roi_lookup_table(
+        os.path.join(path_mpr, "multilevel_lookup_table.txt")
+    )
+    label_num = len(roi_lookup_all)
+    regex = re.compile(rf"^{name_mpr}.*{label_num}.*(?<!MNI)\.img$")
+    files = [f for f in os.listdir(path_mpr) if re.match(regex, f)]
+    roimaskfile = files[0]
+    maskvol, allmask = load_img(os.path.join(path_mpr, roimaskfile))
+    brainmask = np.zeros_like(allmask)
+    for ii in range(label_num):
+        if len(roi_lookup_all[ii]) > 4:
+            brainmask[allmask == (ii + 1)] = 1
+    mpr_brain_data = mpr * brainmask
+    mpr_brain_img = nib.Nifti1Image(mpr_brain_data, mVol.affine, mVol.header)
+    mpr_brain_file = os.path.join(path_mpr, f"{name_mpr}_brain.nii")
+    mpr_brain_img.to_filename(mpr_brain_file)
+    return mpr_brain_file
+
+
+def coreg_mpr(data_descrip: dict):
+    for key, value in data_descrip["Images"].items():
+        key = key.replace("rawdata", "derivatives")
+        target = asl_skullstrip(
+            os.path.join(key, "anat", value["mpr_folder"]), value["mpr_name"]
+        )
+        for asl_file in value["asl"]:
+            if data_descrip["M0Type"] != "Estimate":
+                source = os.path.join(key, "perf", "rM0ave.nii")
+            else:
+                source = os.path.join(key, "perf", f"mean{asl_file}.nii")
+            other1 = os.path.join(key, "perf", f"{asl_file}_aCBF_native.nii")
+            other2 = os.path.join(key, "perf", f"{asl_file}_rCBF_native.nii")
+            other3 = os.path.join(key, "perf", "brnmsk_clcu.nii")
+            other4 = os.path.join(key, "perf", f"{asl_file}_ATT_native.nii")
+            if data_descrip["SingleDelay"]:
+                asl_coreg(target, source, [other1, other2, other3])
+            else:
+                asl_coreg(target, source, [other1, other2, other3, other4])
+            os.rename(
+                os.path.join(key, "perf", f"r{asl_file}_aCBF_native.nii"),
+                os.path.join(key, "perf", f"{asl_file}_aCBF_mpr.nii"),
             )
+            os.rename(
+                os.path.join(key, "perf", f"r{asl_file}_rCBF_native.nii"),
+                os.path.join(key, "perf", f"{asl_file}_rCBF_mpr.nii"),
+            )
+            os.rename(
+                os.path.join(key, "perf", "rbrnmsk_clcu.nii"),
+                os.path.join(key, "perf", "brnmsk_clcu_mpr.nii"),
+            )
+            if os.path.exists(os.path.join(key, "perf", f"r{asl_file}_ATT_native.nii")):
+                os.rename(
+                    os.path.join(key, "perf", f"r{asl_file}_ATT_native.nii"),
+                    os.path.join(key, "perf", f"{asl_file}_ATT_mpr.nii"),
+                )
 
 
-def asl_pipeline(root, t1_tissue, t1_blood, labl_eff, part_coef):
+def read_roi_lists_info(roi_stats_file: str, roitypes: list):
+    with open(roi_stats_file, "r") as file:
+        alllines = file.readlines()
+    nline = len(alllines)
+    tmpinfo = []
+    iline = 0
+    while iline < nline:
+        splitStr = re.split(r"[ \t\b]+", alllines[iline].strip())
+        for roi_type in roitypes:
+            if splitStr[0] == roi_type:
+                tmpdict = {"type": splitStr[0], "count": 0, "list": []}
+                iline += 2
+                while iline < nline and re.search(r".img", alllines[iline]):
+                    tmpdict["count"] += 1
+                    splitStr2 = re.split(r"[ \t]+", alllines[iline].strip())
+                    if len(splitStr2) > 1:
+                        tmpdict["list"].append(splitStr2[1])
+                    iline += 1
+                tmpinfo.append(tmpdict)
+        iline += 1
+    return tmpinfo
+
+
+def asl_t1roi_CBFaverage(data_descrip: dict):
+    for key, value in data_descrip["Images"].items():
+        key = key.replace("rawdata", "derivatives")
+        roi_lookup_file = os.path.join(
+            key, "anat", value["mpr_folder"], "multilevel_lookup_table.txt"
+        )
+        roi_lookup_all = read_roi_lookup_table(roi_lookup_file)
+        label_num = len(roi_lookup_all)
+        regex = re.compile(rf'^{value["mpr_name"]}.*{label_num}.*MNI_stats\.txt$')
+        files = [
+            f
+            for f in os.listdir(os.path.join(key, "anat", value["mpr_folder"]))
+            if re.match(regex, f)
+        ]
+        roi_stats_file = files[0]
+        roitypes = ["Type1-L2", "Type1-L3", "Type1-L5"]
+        roi_lookup_tbl = [4, 3, 1]
+        roi_lists_info = read_roi_lists_info(roi_stats_file, roitypes)
+        roi_lists_info[2]["count"] = label_num
+        roi_lists_info[2]["list"] = roi_lookup_all
+
+        regex = re.compile(rf'^{value["mpr_name"]}.*{label_num}.*(?<!MNI)\.img$')
+        files = [f for f in os.listdir(value["mpr_folder"]) if re.match(regex, f)]
+        roimaskfile = files[0]
+        V0, mskv = load_img(os.path.join(key, "anat", value["mpr_folder"], roimaskfile))
+
+        for asl_file in value["asl"]:
+            V1, acbf = load_img(os.path.join(key, "perf", f"{asl_file}_aCBF_mpr.nii"))
+            V2, rcbf = load_img(os.path.join(key, "perf", f"{asl_file}_rCBF_mpr.nii"))
+            V3, msk1 = load_img(os.path.join(key, "perf", "brnmsk_clcu_mpr.nii"))
+
+            fresult = os.path.join(key, "perf", f"{asl_file}_CBF_T1segmented_ROIs.txt")
+            with open(fresult, "w") as fid:
+                coltitle = "ROI analysis by {} major tissue types\n"
+                colnames = "Index\tMask_name\tRegional_CBF(ml/100g/min)\tRegional_relative_CBF\tNumber_of_voxels\n"
+
+                for tt in range(len(roi_lists_info) - 1):
+                    roi_tbl = roi_lookup_tbl[tt]
+                    roi_lst = roi_lists_info[tt]["list"]
+                    seg_num = roi_lists_info[tt]["count"]
+                    segmask = np.zeros_like(mskv)
+
+                    for ii in range(seg_num):
+                        for kk in range(label_num):
+                            if len(roi_lookup_all[kk]) <= roi_tbl:
+                                continue
+                            if roi_lst[ii] == roi_lookup_all[kk][roi_tbl]:
+                                segmask[mskv == (kk + 1)] = ii + 1
+
+                    segmask_img = nib.Nifti1Image(segmask, V0.affine, V0.header)
+                    segmask_img.to_filename(
+                        key,
+                        "anat",
+                        value["mpr_folder"],
+                        f"{value['mpr_name']}_{seg_num}_segments.nii",
+                    )
+
+                    fid.write(coltitle.format(seg_num))
+                    fid.write(colnames)
+                    for ii in range(seg_num):
+                        idxvox_seg = (segmask == (ii + 1)) & (msk1 > 0.5)
+                        seg_acbf = np.mean(acbf[idxvox_seg])
+                        seg_rcbf = np.mean(rcbf[idxvox_seg])
+                        seg_nvox = np.sum(idxvox_seg)
+                        seg_name = roi_lst[ii]
+                        fid.write(
+                            f"{ii+1}\t{seg_name}\t{seg_acbf:.2f}\t{seg_rcbf:.2f}\t{seg_nvox}\n"
+                        )
+                    fid.write("\n\n")
+
+                fid.write(coltitle.format(label_num))
+                fid.write(colnames)
+                for ii in range(label_num):
+                    idxvox_seg = (mskv == (ii + 1)) & (msk1 > 0.5)
+                    seg_acbf = np.mean(acbf[idxvox_seg])
+                    seg_rcbf = np.mean(rcbf[idxvox_seg])
+                    seg_nvox = np.sum(idxvox_seg)
+                    seg_name = roi_lists_info[3]["list"][ii]
+                    fid.write(
+                        f"{ii+1}\t{seg_name}\t{seg_acbf:.2f}\t{seg_rcbf:.2f}\t{seg_nvox}\n"
+                    )
+
+
+def asl_pipeline(
+    root: str,
+    flag_t1: bool,
+    t1_tissue: float,
+    t1_blood: float,
+    labl_eff: float,
+    part_coef: float,
+):
     data_descrip = read_data_description(root)
-    create_derivatives_folders(data_descrip)
     asl_rescale(data_descrip)
 
     if data_descrip["SingleDelay"]:
@@ -845,3 +1050,8 @@ def asl_pipeline(root, t1_tissue, t1_blood, labl_eff, part_coef):
         asl_calculate_diffmap(data_descrip)
         asl_multidelay_calculate_M0(data_descrip)
         asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, labl_eff, part_coef)
+
+    if flag_t1:
+        data_descrip = read_mpr(data_descrip)
+        coreg_mpr(data_descrip)
+        asl_t1roi_CBFaverage(data_descrip)

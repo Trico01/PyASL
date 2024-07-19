@@ -1,10 +1,5 @@
 from .data_import import load_data
-from .asl_process import asl_pipeline
+from .asl_mricloud import asl_mricloud_pipeline
+from .asltbx import asltbx_pipeline
 
-# from .structural_module import process_structural_data
-
-__all__ = [
-    "load_data",
-    "asl_pipeline",
-    # "process_structural_data",
-]
+__all__ = ["load_data", "asl_mricloud_pipeline", "asltbx_pipeline"]

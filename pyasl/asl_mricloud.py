@@ -1030,7 +1030,7 @@ def asl_t1roi_CBFaverage(data_descrip: dict):
                     )
 
 
-def asl_pipeline(
+def asl_mricloud_pipeline(
     root: str,
     flag_t1: bool,
     t1_tissue: float,

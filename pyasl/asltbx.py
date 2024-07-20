@@ -132,7 +132,7 @@ def create_mask(data_descrip: dict):
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
         for asl_file in value["asl"]:
-            PF = os.path.join(key, "perf", f"mean{asl_file}.nii")
+            PF = os.path.join(key, "perf", f"srmean{asl_file}.nii")
             V, data = load_img(PF)
             mask = data > 0.2 * np.max(data)
             header = V.header.copy()
@@ -159,17 +159,17 @@ def sinc_interpVec(x: np.ndarray, u: float):
 
 def perf_subtract(
     data_descrip: dict,
-    QuantFlag=1,  # change: 0-disabled, 1-csf, 2-wm
-    M0wmcsf=None,
-    TE=None,
-    labeff=None,
-    MaskFlag=True,
-    MeanFlag=True,
-    BOLDFlag=False,
-    PerfFlag=False,
-    SubtractionType=0,
-    SubtrationOrder=1,
-    Timeshift=0.5,
+    QuantFlag,
+    M0wmcsf,
+    TE,
+    labeff,
+    MaskFlag,
+    MeanFlag,
+    BOLDFlag,
+    PerfFlag,
+    SubtractionType,
+    SubtrationOrder,
+    Timeshift,
 ):
     qTI = 0.85
     Rwm = 1.19  # 1.06 in Wong 97. 1.19 in Cavosuglu 09, Proton density ratio between blood and WM;
@@ -224,14 +224,14 @@ def perf_subtract(
         key = key.replace("rawdata", "derivatives")
         if QuantFlag == 0:
             if data_descrip["M0Type"] == "Separate":
-                P_m0 = os.path.join(key, "perf", f"{value['M0']}.nii")
+                P_m0 = os.path.join(key, "perf", f"sr{value['M0']}.nii")
                 V_m0, m0all = load_img(P_m0)
                 if m0all.ndim == 4:
                     M0 = np.mean(m0all, axis=3)
                 else:
                     M0 = m0all
             elif data_descrip["M0Type"] == "Included":
-                P = os.path.join(key, "perf", f"{value['asl'][0]}.nii")
+                P = os.path.join(key, "perf", f"srr{value['asl'][0]}.nii")
                 V, data = load_img(P)
                 num_m0 = 0
                 M0 = np.zeros(data.shape[:3])
@@ -244,7 +244,7 @@ def perf_subtract(
         for asl_file in value["asl"]:
             Pmask = os.path.join(key, "perf", f"{asl_file}_mask_perf_cbf.nii")
             Vmask, maskdat = load_img(Pmask)
-            Pall = os.path.join(key, "perf", f"{asl_file}.nii")
+            Pall = os.path.join(key, "perf", f"srr{asl_file}.nii")
             Vall, alldat = load_img(Pall)
             if QuantFlag == 0 and useM0:
                 if not np.array_equal(M0.shape, alldat.shape[:3]):
@@ -470,11 +470,38 @@ def perf_subtract(
                     )
 
 
-def asltbx_pipeline(root: str, smooth_fwhm=[6, 6, 6]):
+def asltbx_pipeline(
+    root: str,
+    smooth_fwhm=[6, 6, 6],
+    QuantFlag=1,
+    M0wmcsf=None,
+    TE=None,
+    labeff=None,
+    MaskFlag=True,
+    MeanFlag=True,
+    BOLDFlag=False,
+    PerfFlag=False,
+    SubtractionType=0,
+    SubtrationOrder=1,
+    Timeshift=0.5,
+):
     data_descrip = read_data_description(root)
     reset_orientation(data_descrip)
     realign(data_descrip)
     coregister(data_descrip)
     smooth(data_descrip, smooth_fwhm)
     create_mask(data_descrip)
-    perf_subtract(data_descrip)
+    perf_subtract(
+        data_descrip,
+        QuantFlag,
+        M0wmcsf,
+        TE,
+        labeff,
+        MaskFlag,
+        MeanFlag,
+        BOLDFlag,
+        PerfFlag,
+        SubtractionType,
+        SubtrationOrder,
+        Timeshift,
+    )

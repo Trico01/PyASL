@@ -4,3 +4,4 @@ nipype
 scipy
 scikit-image
 pandas
+tensorflow

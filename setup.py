@@ -11,6 +11,7 @@ setup(
         "scipy",
         "scikit-image",
         "pandas",
+        "tensorflow",
     ],
     author="Trico",
     author_email="trico010725@gmail.com",

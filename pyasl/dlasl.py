@@ -7,7 +7,7 @@ from utils.models import dilated_net_wide
 from utils.utils import read_data_description, load_img
 
 
-def dlasl_resample(v, data):
+def dlasl_resample(v: nib.Nifti1Image, data: np.ndarray):
     original_shape = data.shape
     original_affine = v.affine
 

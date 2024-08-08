@@ -173,7 +173,10 @@ def read_params(params_json: str, has_structural: bool):
         if key not in asl_params:
             return (False, f"Missing parameter: {key}", {})
 
-    if asl_params["ArterialSpinLabelingType"] == "pCASL":
+    if (
+        asl_params["ArterialSpinLabelingType"] == "pCASL"
+        or asl_params["ArterialSpinLabelingType"] == "CASL"
+    ):
         required_asl_keys = [
             "PostLabelingDelay",
             "LabelingDuration",
@@ -191,7 +194,10 @@ def read_params(params_json: str, has_structural: bool):
         if "SliceDuration" not in asl_params:
             return (False, "Missing parameter: SliceDuration", {})
 
-    if asl_params["ArterialSpinLabelingType"] == "pCASL":
+    if (
+        asl_params["ArterialSpinLabelingType"] == "pCASL"
+        or asl_params["ArterialSpinLabelingType"] == "CASL"
+    ):
         temp_value = asl_params["PostLabelingDelay"]
         temp_name = "PostLabelingDelay"
     elif asl_params["ArterialSpinLabelingType"] == "PASL":
@@ -279,7 +285,10 @@ def make_sidecar(params: dict, num_volumes: int):
         asl_json_data["M0"] = params["M0"].copy()
 
     volume_type = []
-    if params["ASL"]["ArterialSpinLabelingType"] == "pCASL":
+    if (
+        params["ASL"]["ArterialSpinLabelingType"] == "pCASL"
+        or params["ASL"]["ArterialSpinLabelingType"] == "CASL"
+    ):
         temp_value = params["ASL"]["PostLabelingDelay"]
     elif params["ASL"]["ArterialSpinLabelingType"] == "PASL":
         temp_value = params["ASL"]["TI"]
@@ -340,7 +349,10 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
                 nii_image = nii_file.get_fdata()
                 num_volumes = nii_image.shape[-1]
 
-            if params["ASL"]["ArterialSpinLabelingType"] == "pCASL":
+            if (
+                params["ASL"]["ArterialSpinLabelingType"] == "pCASL"
+                or params["ASL"]["ArterialSpinLabelingType"] == "CASL"
+            ):
                 temp_value = params["ASL"]["PostLabelingDelay"]
                 temp_name = "PostLabelingDelay"
             elif params["ASL"]["ArterialSpinLabelingType"] == "PASL":
@@ -447,7 +459,10 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
     data_description_json["Images"] = sessions_dict.copy()
     data_description_json["ASLContext"] = tsv_data["volume_type"].copy()
     data_description_json["PLDList"] = []
-    if params["ASL"]["ArterialSpinLabelingType"] == "pCASL":
+    if (
+        params["ASL"]["ArterialSpinLabelingType"] == "pCASL"
+        or params["ASL"]["ArterialSpinLabelingType"] == "CASL"
+    ):
         temp_value = params["ASL"]["PostLabelingDelay"]
     elif params["ASL"]["ArterialSpinLabelingType"] == "PASL":
         temp_value = params["ASL"]["TI"]
@@ -510,7 +525,10 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
             with open(json_path, "r") as json_file:
                 json_info = json.load(json_file)
                 data_description_json = json_info.copy()
-            if data_description_json["ArterialSpinLabelingType"] == "pCASL":
+            if (
+                data_description_json["ArterialSpinLabelingType"] == "pCASL"
+                or data_description_json["ArterialSpinLabelingType"] == "CASL"
+            ):
                 temp_value = data_description_json["PostLabelingDelay"]
             elif data_description_json["ArterialSpinLabelingType"] == "PASL":
                 temp_value = data_description_json["TI"]

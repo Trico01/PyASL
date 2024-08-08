@@ -7,7 +7,7 @@ from nipype.interfaces import spm
 from scipy.ndimage import binary_fill_holes, binary_erosion, binary_dilation, label
 from skimage.morphology import ball
 from scipy.optimize import curve_fit
-from utils.utils import read_data_description, load_img
+from pyasl.utils.utils import read_data_description, load_img
 
 
 def img_rescale(source_path: str, target_path: str):
@@ -383,9 +383,7 @@ def asl_calculate_M0(data_descrip: dict, t1_tissue: float):
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
-def asl_calculate_CBF(
-    data_descrip: dict, t1_blood: float, labl_eff: float, part_coef: float
-):
+def asl_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float):
     print("pyasl: Calculate CBF...")
 
     for key, value in data_descrip["Images"].items():
@@ -440,9 +438,9 @@ def asl_calculate_CBF(
                 alpha = (
                     data_descrip["BackgroundSuppressionEfficiency"]
                     ** data_descrip["BackgroundSuppressionNumberPulses"]
-                ) * labl_eff
+                ) * data_descrip["InversionEfficiency"]
             else:
-                alpha = labl_eff
+                alpha = data_descrip["InversionEfficiency"]
             cbf = tmpcbf / m0vol * brvol * part_coef / 2 / alpha * 60 * 100 * 1000
             cbf_thr = np.clip(cbf, 0, 200)
             cbf_glo = np.mean(cbf_thr[brnmsk_clcu])
@@ -686,7 +684,7 @@ def asl_func_gkm_pasl_looklocker(
 
 
 def asl_multidelay_calculate_CBFATT(
-    data_descrip: dict, t1_blood: float, labl_eff: float, part_coef: float
+    data_descrip: dict, t1_blood: float, part_coef: float
 ):
     print("pyasl: Calculate CBF and ATT...")
 
@@ -727,7 +725,7 @@ def asl_multidelay_calculate_CBFATT(
             plds = np.array(plds) / 1000
 
             paras = {
-                "labl_eff": labl_eff,
+                "labl_eff": data_descrip["InversionEfficiency"],
                 "t1_blood": t1_blood / 1000,
                 "part_coef": part_coef,
             }
@@ -1013,7 +1011,6 @@ def asl_mricloud_pipeline(
     flag_t1: bool,
     t1_tissue: float,
     t1_blood: float,
-    labl_eff: float,
     part_coef: float,
 ):
     data_descrip = read_data_description(root)
@@ -1023,11 +1020,11 @@ def asl_mricloud_pipeline(
         asl_realign(data_descrip)
         asl_calculate_diffmap(data_descrip)
         asl_calculate_M0(data_descrip, t1_tissue)
-        asl_calculate_CBF(data_descrip, t1_blood, labl_eff, part_coef)
+        asl_calculate_CBF(data_descrip, t1_blood, part_coef)
     else:
         asl_calculate_diffmap(data_descrip)
         asl_multidelay_calculate_M0(data_descrip)
-        asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, labl_eff, part_coef)
+        asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, part_coef)
 
     if flag_t1:
         data_descrip = read_mpr(data_descrip)

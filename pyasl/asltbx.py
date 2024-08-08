@@ -2,7 +2,7 @@ import os
 import numpy as np
 import nibabel as nib
 from nipype.interfaces import spm
-from utils.utils import read_data_description, load_img
+from pyasl.utils.utils import read_data_description, load_img
 
 
 def img_reset_orientation(source_path: str, target_path: str):
@@ -139,7 +139,6 @@ def perf_subtract(
     data_descrip: dict,
     QuantFlag,
     M0wmcsf,
-    TE,
     labeff,
     MaskFlag,
     MeanFlag,
@@ -172,13 +171,7 @@ def perf_subtract(
         BloodT1 = 1810
     r1a = 1 / BloodT1
 
-    if not labeff:
-        if data_descrip["ArterialSpinLabelingType"] == "PASL":
-            labeff = 0.95
-        elif data_descrip["ArterialSpinLabelingType"] == "CASL":
-            labeff = 0.68
-        else:  # pCASL
-            labeff = 0.82
+    labeff = data_descrip["InversionEfficiency"]
 
     useM0 = False
     if QuantFlag != 0:
@@ -186,12 +179,18 @@ def perf_subtract(
             raise ValueError(
                 "Missing M0 value of WM or CSF for unique M0 based quantification"
             )
-        if not TE:
-            raise ValueError("Missing TE value for unique M0 based quantification")
         if QuantFlag == 1:
-            M0b = M0wmcsf * Rcsf * np.exp((1 / T2csf - 1 / T2b) * TE)
+            M0b = (
+                M0wmcsf
+                * Rcsf
+                * np.exp((1 / T2csf - 1 / T2b) * data_descrip["M0"]["EchoTime"])
+            )
         else:
-            M0b = M0wmcsf * Rwm * np.exp((1 / T2wm - 1 / T2b) * TE)
+            M0b = (
+                M0wmcsf
+                * Rwm
+                * np.exp((1 / T2wm - 1 / T2b) * data_descrip["M0"]["EchoTime"])
+            )
     else:
         if data_descrip["M0Type"] == "Estimate":
             useM0 = False
@@ -453,8 +452,6 @@ def asltbx_pipeline(
     smooth_fwhm=[6, 6, 6],
     QuantFlag=1,
     M0wmcsf=None,
-    TE=None,
-    labeff=None,
     MaskFlag=True,
     MeanFlag=True,
     BOLDFlag=False,
@@ -473,8 +470,6 @@ def asltbx_pipeline(
         data_descrip,
         QuantFlag,
         M0wmcsf,
-        TE,
-        labeff,
         MaskFlag,
         MeanFlag,
         BOLDFlag,

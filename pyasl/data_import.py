@@ -3,6 +3,7 @@ import json
 import shutil
 import nibabel as nib
 import pandas as pd
+from pyasl.utils.utils import read_data_description
 
 
 def check_bids_format(root: str):
@@ -131,7 +132,7 @@ def check_bids_format(root: str):
     return (True, "", img_type, has_structural)
 
 
-def read_params(params_json: str):
+def read_params(params_json: str, has_structural: bool):
     try:
         with open(params_json, "r") as json_file:
             params = json.load(json_file)
@@ -150,6 +151,8 @@ def read_params(params_json: str):
             {},
         )
 
+    # check ASL parameters
+    asl_params = params["ASL"]
     required_keys = [
         "Manufacturer",
         "ManufacturersModelName",
@@ -161,40 +164,41 @@ def read_params(params_json: str):
         "M0Type",
         "MRAcquisitionType",
         "BackgroundSuppression",
+        "InversionEfficiency",
         "LabelControl",
         "SingleDelay",
     ]
 
     for key in required_keys:
-        if key not in params:
+        if key not in asl_params:
             return (False, f"Missing parameter: {key}", {})
 
-    if params["ArterialSpinLabelingType"] == "pCASL":
+    if asl_params["ArterialSpinLabelingType"] == "pCASL":
         required_asl_keys = [
             "PostLabelingDelay",
             "LabelingDuration",
         ]
-    elif params["ArterialSpinLabelingType"] == "PASL":
-        if params["SingleDelay"]:
+    elif asl_params["ArterialSpinLabelingType"] == "PASL":
+        if asl_params["SingleDelay"]:
             required_asl_keys = ["TI1", "TI"]
         else:
             required_asl_keys = ["TI1", "TI", "Looklocker"]
         for key in required_asl_keys:
-            if key not in params:
+            if key not in asl_params:
                 return (False, f"Missing parameter: {key}", {})
 
-    if params["MRAcquisitionType"] == "2D":
-        if "SliceDuration" not in params:
+    if asl_params["MRAcquisitionType"] == "2D":
+        if "SliceDuration" not in asl_params:
             return (False, "Missing parameter: SliceDuration", {})
 
-    if params["ArterialSpinLabelingType"] == "pCASL":
-        temp_value = params["PostLabelingDelay"]
+    if asl_params["ArterialSpinLabelingType"] == "pCASL":
+        temp_value = asl_params["PostLabelingDelay"]
         temp_name = "PostLabelingDelay"
-    elif params["ArterialSpinLabelingType"] == "PASL":
-        temp_value = params["TI"]
+    elif asl_params["ArterialSpinLabelingType"] == "PASL":
+        temp_value = asl_params["TI"]
         temp_name = "TI"
 
-    if not params["SingleDelay"]:
+    if not asl_params["SingleDelay"]:
         if not isinstance(temp_value, (list)):
             return (
                 False,
@@ -202,7 +206,7 @@ def read_params(params_json: str):
                 {},
             )
     else:
-        if params["M0Type"] != "Included":
+        if asl_params["M0Type"] != "Included":
             if isinstance(temp_value, (list)):
                 return (
                     False,
@@ -210,51 +214,81 @@ def read_params(params_json: str):
                     {},
                 )
 
-    if params["M0Type"] == "Included":
+    if asl_params["M0Type"] == "Included":
         if not isinstance(temp_value, (list)):
             return (False, f"Invalid {temp_name}: no M0 included", {})
         if not (0 in temp_value):
             return (False, f"Invalid {temp_name}: no M0 included", {})
 
-    if params["BackgroundSuppression"]:
+    if asl_params["BackgroundSuppression"]:
         required_bg_keys = [
             "BackgroundSuppressionNumberPulses",
             "BackgroundSuppressionPulseTime",
             "BackgroundSuppressionEfficiency",
         ]
         for key in required_bg_keys:
-            if key not in params:
+            if key not in asl_params:
                 return (False, f"Missing parameter: {key}", {})
+
+    # check structural image parameters
+    if has_structural:
+        anat_params = params["anat"]
+        required_keys = [
+            "Manufacturer",
+            "ManufacturersModelName",
+            "MagneticFieldStrength",
+            "RepetitionTime",
+            "EchoTime",
+            "FlipAngle",
+        ]
+        for key in required_keys:
+            if key not in anat_params:
+                return (False, f"Missing parameter: {key}", {})
+    else:
+        params["anat"] = {}
+
+    # check M0 image parameters
+    if asl_params["M0Type"] != "Estimate":
+        m0_params = params["M0"]
+        required_keys = [
+            "Manufacturer",
+            "ManufacturersModelName",
+            "MagneticFieldStrength",
+            "RepetitionTime",
+            "EchoTime",
+            "FlipAngle",
+        ]
+        for key in required_keys:
+            if key not in m0_params:
+                return (False, f"Missing parameter: {key}", {})
+    else:
+        params["M0"] = {}
 
     return (True, "", params)
 
 
 def make_sidecar(params: dict, num_volumes: int):
-    asl_json_data = params.copy()
+    asl_json_data = params["ASL"].copy()
     asl_json_data.pop("LabelControl")
     asl_json_data.pop("SingleDelay")
 
-    structural_keys = [
-        "Manufacturer",
-        "ManufacturersModelName",
-        "MagneticFieldStrength",
-        "RepetitionTime",
-        "EchoTime",
-        "FlipAngle",
-    ]
-    structural_json_data = {key: params[key] for key in structural_keys}
+    structural_json_data = params["anat"].copy()
+    m0_json_data = params["M0"].copy()
+
+    if params["ASL"]["M0Type"] == "Included":
+        asl_json_data["M0"] = params["M0"].copy()
 
     volume_type = []
-    if params["ArterialSpinLabelingType"] == "pCASL":
-        temp_value = params["PostLabelingDelay"]
-    elif params["ArterialSpinLabelingType"] == "PASL":
-        temp_value = params["TI"]
+    if params["ASL"]["ArterialSpinLabelingType"] == "pCASL":
+        temp_value = params["ASL"]["PostLabelingDelay"]
+    elif params["ASL"]["ArterialSpinLabelingType"] == "PASL":
+        temp_value = params["ASL"]["TI"]
     if isinstance(temp_value, (list)):
         for pld in temp_value:
             if pld == 0:
                 volume_type.append("m0scan")
             else:
-                if params["LabelControl"]:
+                if params["ASL"]["LabelControl"]:
                     volume_type.append("label")
                     volume_type.append("control")
                 else:
@@ -262,14 +296,14 @@ def make_sidecar(params: dict, num_volumes: int):
                     volume_type.append("label")
     else:
         for i in range(int(num_volumes / 2)):
-            if params["LabelControl"]:
+            if params["ASL"]["LabelControl"]:
                 volume_type.append("label")
                 volume_type.append("control")
             else:
                 volume_type.append("control")
                 volume_type.append("label")
     tsv_data = {"volume_type": volume_type}
-    return asl_json_data, structural_json_data, tsv_data
+    return asl_json_data, structural_json_data, m0_json_data, tsv_data
 
 
 def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
@@ -294,7 +328,7 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
             M0_images = [img for img in perf_images if "M0" in img]
             asl_images = [img for img in perf_images if "M0" not in img]
 
-            if params["M0Type"] == "Separate":
+            if params["ASL"]["M0Type"] == "Separate":
                 if not M0_images:
                     return False, f"No separate M0 file found in {perf_path}"
 
@@ -306,11 +340,11 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
                 nii_image = nii_file.get_fdata()
                 num_volumes = nii_image.shape[-1]
 
-            if params["ArterialSpinLabelingType"] == "pCASL":
-                temp_value = params["PostLabelingDelay"]
+            if params["ASL"]["ArterialSpinLabelingType"] == "pCASL":
+                temp_value = params["ASL"]["PostLabelingDelay"]
                 temp_name = "PostLabelingDelay"
-            elif params["ArterialSpinLabelingType"] == "PASL":
-                temp_value = params["TI"]
+            elif params["ASL"]["ArterialSpinLabelingType"] == "PASL":
+                temp_value = params["ASL"]["TI"]
                 temp_name = "TI"
 
             if isinstance(temp_value, (list)):
@@ -320,7 +354,9 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
                         f"Number of volumes in ASL image does not match {temp_name} parameter",
                     )
 
-    asl_json_data, structural_json_data, tsv_data = make_sidecar(params, num_volumes)
+    asl_json_data, structural_json_data, m0_json_data, tsv_data = make_sidecar(
+        params, num_volumes
+    )
 
     sessions_dict = {}
 
@@ -354,8 +390,6 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
 
             img_name = os.path.splitext(perf_image)[0]
             json_path = os.path.join(perf_path_temp, img_name + ".json")
-            with open(json_path, "w") as json_file:
-                json.dump(asl_json_data, json_file, indent=4)
 
             if "M0" not in img_name:
                 tsv_path = os.path.join(perf_path_temp, img_name + "_aslcontext.tsv")
@@ -363,9 +397,14 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
                 df.to_csv(tsv_path, sep="\t", index=False)
 
                 session_dict["asl"].append(img_name)
+
+                with open(json_path, "w") as json_file:
+                    json.dump(asl_json_data, json_file, indent=4)
             else:
-                if params["M0Type"] == "Separate":
+                if params["ASL"]["M0Type"] == "Separate":
                     session_dict["M0"] = img_name
+                    with open(json_path, "w") as json_file:
+                        json.dump(m0_json_data, json_file, indent=4)
 
         if has_structural:
             anat_path = os.path.join(all_session_paths[i], "anat")
@@ -400,14 +439,18 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool):
     os.rename(source_path, os.path.join(root, "rawdata_user"))
     os.rename(os.path.join(root, "rawdata_temp"), source_path)
 
-    data_description_json = params.copy()
+    data_description_json = params["ASL"].copy()
+    if has_structural:
+        data_description_json["anat"] = params["anat"].copy()
+    if params["ASL"]["M0Type"] != "Estimate":
+        data_description_json["M0"] = params["M0"].copy()
     data_description_json["Images"] = sessions_dict.copy()
     data_description_json["ASLContext"] = tsv_data["volume_type"].copy()
     data_description_json["PLDList"] = []
-    if params["ArterialSpinLabelingType"] == "pCASL":
-        temp_value = params["PostLabelingDelay"]
-    elif params["ArterialSpinLabelingType"] == "PASL":
-        temp_value = params["TI"]
+    if params["ASL"]["ArterialSpinLabelingType"] == "pCASL":
+        temp_value = params["ASL"]["PostLabelingDelay"]
+    elif params["ASL"]["ArterialSpinLabelingType"] == "PASL":
+        temp_value = params["ASL"]["TI"]
     if isinstance(temp_value, (list)):
         PLD_temp = [pld for pld in temp_value if pld != 0]
         i = 0
@@ -459,17 +502,21 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
         }
         perf_path = os.path.join(all_session_paths[i], "perf")
         perf_images = [d for d in os.listdir(perf_path) if d.endswith((img_type))]
+
+        if not data_description_json:
+            perf_names = [os.path.splitext(img)[0] for img in perf_images]
+            asl_names = [name for name in perf_names if "M0" not in name]
+            json_path = os.path.join(perf_path, asl_names[0] + ".json")
+            with open(json_path, "r") as json_file:
+                json_info = json.load(json_file)
+                data_description_json = json_info.copy()
+            if data_description_json["ArterialSpinLabelingType"] == "pCASL":
+                temp_value = data_description_json["PostLabelingDelay"]
+            elif data_description_json["ArterialSpinLabelingType"] == "PASL":
+                temp_value = data_description_json["TI"]
+
         for perf_image in perf_images:
             img_name = os.path.splitext(perf_image)[0]
-            if not data_description_json:
-                json_path = os.path.join(perf_path, img_name + ".json")
-                with open(json_path, "r") as json_file:
-                    json_info = json.load(json_file)
-                    data_description_json = json_info.copy()
-                if data_description_json["ArterialSpinLabelingType"] == "pCASL":
-                    temp_value = data_description_json["PostLabelingDelay"]
-                elif data_description_json["ArterialSpinLabelingType"] == "PASL":
-                    temp_value = data_description_json["TI"]
 
             if "M0" not in img_name:
                 session_dict["asl"].append(img_name)
@@ -511,6 +558,10 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
                     read_tsv_flag = True
             else:
                 session_dict["M0"] = img_name
+                json_path = os.path.join(perf_path, img_name + ".json")
+                with open(json_path, "r") as json_file:
+                    json_info = json.load(json_file)
+                    data_description_json["M0"] = json_info.copy()
 
         if has_structural:
             anat_path = os.path.join(all_session_paths[i], "anat")
@@ -518,27 +569,18 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
             anat_image = anat_images[0]
             img_name = os.path.splitext(anat_image)[0]
             session_dict["anat"] = img_name
+            json_path = os.path.join(anat_path, img_name + ".json")
+            with open(json_path, "r") as json_file:
+                json_info = json.load(json_file)
+                data_description_json["anat"] = json_info.copy()
 
         sessions_dict[all_session_paths[i]] = session_dict.copy()
+
     data_description_json["Images"] = sessions_dict.copy()
 
     json_path = os.path.join(root, "data_description.json")
     with open(json_path, "w") as json_file:
         json.dump(data_description_json, json_file, indent=4)
-
-
-def read_data_description(root: str):
-    description_file = os.path.join(root, "data_description.json")
-
-    try:
-        with open(description_file, "r") as f:
-            data_descrip = json.load(f)
-    except FileNotFoundError:
-        raise ValueError(f"{description_file} not found.")
-    except json.JSONDecodeError:
-        raise ValueError(f"Failed to decode JSON from {description_file}.")
-
-    return data_descrip
 
 
 def create_derivatives_folders(data_descrip: dict):
@@ -570,7 +612,7 @@ def load_data(root: str, params_json: str, convert=True):
         raise ValueError(error)
 
     if convert:
-        valid, error, params = read_params(params_json)
+        valid, error, params = read_params(params_json, has_structural)
         if not valid:
             raise ValueError(error)
         print("User-input parameters:")

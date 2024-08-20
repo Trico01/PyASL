@@ -27,7 +27,8 @@ def img_rescale(source_path: str, target_path: str):
     rescaled_img.to_filename(target_path)
 
 
-def asl_rescale(data_descrip):
+def mricloud_rescale(data_descrip):
+    print("MRICloud: Rescale ASL data...")
     for key, value in data_descrip["Images"].items():
         for asl_file in value["asl"]:
             asl_path = os.path.join(key, "perf", f"{asl_file}.nii")
@@ -40,8 +41,8 @@ def asl_rescale(data_descrip):
             img_rescale(m0_path, m0_der_path)
 
 
-def asl_realign(data_descrip: dict):
-    print("pyasl: Realign ASL data...")
+def mricloud_realign(data_descrip: dict):
+    print("MRICloud: Realign ASL data...")
 
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
@@ -64,8 +65,8 @@ def asl_realign(data_descrip: dict):
             realign.run()
 
 
-def asl_calculate_diffmap(data_descrip: dict):
-    print("pyasl: Calculate difference volume...")
+def mricloud_calculate_diffmap(data_descrip: dict):
+    print("MRICloud: Calculate difference volume...")
 
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
@@ -105,7 +106,7 @@ def asl_calculate_diffmap(data_descrip: dict):
             diff_img.to_filename(os.path.join(key, "perf", f"r{asl_file}_diff.nii"))
 
 
-def asl_coreg(target: str, source: str, other=[]):
+def img_coreg(target: str, source: str, other=[]):
     coreg = spm.Coregister()
     coreg.inputs.target = target
     coreg.inputs.source = source
@@ -178,7 +179,7 @@ def inbrain(imgvol: np.ndarray, thre: float, ero_lyr: int, dlt_lyr: int):
     return brainmask
 
 
-def asl_getBrainMask(imgtpm: str, imgfile: str, flag_addrealignmsk: bool):
+def mricloud_getBrainMask(imgtpm: str, imgfile: str):
     imgpath, filename = os.path.split(imgfile)
     V, imgvol = load_img(imgfile)
     matsiz = imgvol.shape
@@ -186,16 +187,7 @@ def asl_getBrainMask(imgtpm: str, imgfile: str, flag_addrealignmsk: bool):
     fov = np.multiply(matsiz, voxsiz)
     flag_small_fov = (np.sum(fov < 80) > 0) or (np.sum(np.array(matsiz) < 9) > 0)
 
-    P1 = None
-    for item in os.listdir(imgpath):
-        if item.endswith("brnmsk_realign.nii"):  # check
-            P1 = os.path.join(imgpath, item)
-            break
-    if P1 and flag_addrealignmsk:
-        V1 = nib.load(P1)
-        brnmsk_realign = V1.get_fdata() > 0.5
-    else:
-        brnmsk_realign = np.ones(matsiz) > 0.5
+    brnmsk_realign = np.ones(matsiz) > 0.5
     if not flag_small_fov:
         segment = spm.NewSegment()
         segment.inputs.channel_files = imgfile
@@ -253,8 +245,8 @@ def bgs_factor(mz0: float, t1_tissue: float, flip: list, timing: list, inv_eff: 
     return mz
 
 
-def asl_calculate_M0(data_descrip: dict, t1_tissue: float):
-    print("pyasl: Calculate M0...")
+def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float):
+    print("MRICloud: Calculate M0...")
 
     current_dir = os.path.dirname(__file__)
     imgtpm = os.path.join(current_dir, "tpm", "TPM.nii")
@@ -306,17 +298,17 @@ def asl_calculate_M0(data_descrip: dict, t1_tissue: float):
 
             if np.array_equal(ctrlsiz, m0siz):
                 target = os.path.join(key, "perf", f"mean{asl_file}.nii")
-                asl_coreg(target, m0path)
+                img_coreg(target, m0path)
 
                 P_rm0 = os.path.join(key, "perf", "rM0ave.nii")
                 V_rm0, rm0vol = load_img(P_rm0)
 
-                brnmsk_dspl, brnmsk_clcu = asl_getBrainMask(imgtpm, P_rm0, 1)
+                brnmsk_dspl, brnmsk_clcu = mricloud_getBrainMask(imgtpm, P_rm0)
                 m0map_final = rm0vol * brnmsk_dspl.astype(float)
 
             else:
-                _, brnmsk1_clcu = asl_getBrainMask(imgtpm, m0path, 0)
-                brnmsk_dspl, brnmsk_clcu = asl_getBrainMask(imgtpm, P_ctrl, 1)
+                _, brnmsk1_clcu = mricloud_getBrainMask(imgtpm, m0path)
+                brnmsk_dspl, brnmsk_clcu = mricloud_getBrainMask(imgtpm, P_ctrl)
                 m0_glo = np.mean(m0map[brnmsk1_clcu])
                 m0map_final = brnmsk_dspl.astype(float) * m0_glo
         else:
@@ -368,7 +360,7 @@ def asl_calculate_M0(data_descrip: dict, t1_tissue: float):
                     )
                 m0tmp[:, :, kk] = ctrlvol[:, :, kk] / bgs_f
 
-            brnmsk_dspl, brnmsk_clcu = asl_getBrainMask(imgtpm, P_ctrl, 1)
+            brnmsk_dspl, brnmsk_clcu = mricloud_getBrainMask(imgtpm, P_ctrl)
             m0_glo = np.mean(m0tmp[brnmsk_clcu])
             m0map_final = brnmsk_dspl.astype(float) * m0_glo
 
@@ -383,8 +375,8 @@ def asl_calculate_M0(data_descrip: dict, t1_tissue: float):
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
-def asl_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float):
-    print("pyasl: Calculate CBF...")
+def mricloud_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float):
+    print("MRICloud: Calculate CBF...")
 
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
@@ -449,15 +441,15 @@ def asl_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float):
             header = V_diff.header.copy()
             acbf_img = nib.Nifti1Image(cbf_thr, V_diff.affine, header)
             acbf_img.to_filename(
-                os.path.join(key, "perf", f"r{asl_file}_aCBF_native.nii")
+                os.path.join(key, "perf", f"{asl_file}_aCBF_native.nii")
             )
             rcbf_img = nib.Nifti1Image(rcbf_thr, V_diff.affine, header)
             rcbf_img.to_filename(
-                os.path.join(key, "perf", f"r{asl_file}_rCBF_native.nii")
+                os.path.join(key, "perf", f"{asl_file}_rCBF_native.nii")
             )
 
 
-def asl_func_recover(
+def mricloud_func_recover(
     m0: float, t1: float, tp: np.ndarray, flip_angle=None, m_init=None
 ):
     if flip_angle is not None and m_init is not None:
@@ -481,8 +473,8 @@ def asl_func_recover(
     return mm
 
 
-def asl_multidelay_calculate_M0(data_descrip: dict):
-    print("pyasl: Calculate M0...")
+def mricloud_multidelay_calculate_M0(data_descrip: dict):
+    print("MRICloud: Calculate M0...")
 
     current_dir = os.path.dirname(__file__)
     imgtpm = os.path.join(current_dir, "tpm", "TPM.nii")
@@ -531,15 +523,15 @@ def asl_multidelay_calculate_M0(data_descrip: dict):
                 m0map_img.to_filename(m0path)
 
             target = fn_ctrl
-            asl_coreg(target, m0path)
+            img_coreg(target, m0path)
 
             P_rm0 = os.path.join(key, "perf", "rM0ave.nii")
             V_rm0, rm0vol = load_img(P_rm0)
 
-            brnmsk_dspl, brnmsk_clcu = asl_getBrainMask(imgtpm, P_rm0, 0)
+            brnmsk_dspl, brnmsk_clcu = mricloud_getBrainMask(imgtpm, P_rm0)
             m0map_final = rm0vol * brnmsk_dspl.astype(float)
         else:
-            brnmsk_dspl, brnmsk_clcu = asl_getBrainMask(imgtpm, fn_ctrl, 0)
+            brnmsk_dspl, brnmsk_clcu = mricloud_getBrainMask(imgtpm, fn_ctrl)
             ctrl_all_list = []
             plds = []
             for i, volume_type in enumerate(data_descrip["ASLContext"]):
@@ -556,7 +548,7 @@ def asl_multidelay_calculate_M0(data_descrip: dict):
             m0_map = np.zeros_like(ctrl_last)
 
             if data_descrip["ArterialSpinLabelingType"] == "pCASL":
-                ff = lambda x, m0, t1: asl_func_recover(m0, t1, x)
+                ff = lambda x, m0, t1: mricloud_func_recover(m0, t1, x)
                 beta_init = [m0_int, 1165]
                 lowb = [0, 0]
                 uppb = [10 * m0_int, 5000]
@@ -578,7 +570,7 @@ def asl_multidelay_calculate_M0(data_descrip: dict):
                     m0_map[ivox] = beta1[0]
 
             elif data_descrip["ArterialSpinLabelingType"] == "PASL":
-                ff = lambda x, m0, t1, m_init: asl_func_recover(
+                ff = lambda x, m0, t1, m_init: mricloud_func_recover(
                     m0, t1, x, data_descrip["Looklocker"], m_init
                 )
                 beta_init = [m0_int, 1165, 0]
@@ -610,7 +602,7 @@ def asl_multidelay_calculate_M0(data_descrip: dict):
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
-def asl_func_gkm_pcasl_multidelay(
+def mricloud_func_gkm_pcasl_multidelay(
     cbf: float, att: float, casl_dur: float, plds: np.ndarray, paras: dict
 ):
     t1_blood = paras["t1_blood"]
@@ -637,7 +629,7 @@ def asl_func_gkm_pcasl_multidelay(
     return mm
 
 
-def asl_func_gkm_pasl_looklocker(
+def mricloud_func_gkm_pasl_looklocker(
     cbf: float,
     att: float,
     pasl_dur: float,
@@ -683,10 +675,10 @@ def asl_func_gkm_pasl_looklocker(
     return mm
 
 
-def asl_multidelay_calculate_CBFATT(
+def mricloud_multidelay_calculate_CBFATT(
     data_descrip: dict, t1_blood: float, part_coef: float
 ):
-    print("pyasl: Calculate CBF and ATT...")
+    print("MRICloud: Calculate CBF and ATT...")
 
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
@@ -734,7 +726,7 @@ def asl_multidelay_calculate_CBFATT(
             cbfmap = np.zeros_like(m0map)
 
             if data_descrip["ArterialSpinLabelingType"] == "pCASL":
-                ff = lambda x, cbf, att: asl_func_gkm_pcasl_multidelay(
+                ff = lambda x, cbf, att: mricloud_func_gkm_pcasl_multidelay(
                     cbf, att, data_descrip["LabelingDuration"] / 1000, x, paras
                 )
                 beta_init = [60, 0.5]
@@ -760,7 +752,7 @@ def asl_multidelay_calculate_CBFATT(
                     attmap[ivox] = beta1[1] * 1000
 
             elif data_descrip["ArterialSpinLabelingType"] == "PASL":
-                ff = lambda x, cbf, att: asl_func_gkm_pasl_looklocker(
+                ff = lambda x, cbf, att: mricloud_func_gkm_pasl_looklocker(
                     cbf,
                     att,
                     data_descrip["TI1"] / 1000,
@@ -806,7 +798,7 @@ def read_mpr(data_descrip: dict):
     for key, value in data_descrip["Images"].items():
         key_der = key.replace("rawdata", "derivatives")
         if not value["anat"]:
-            raise ValueError("Missing structural images for multi-atlas analysis.")
+            raise ValueError("Missing structural images for multi-atlas analysis!")
         anat_path = os.path.join(key_der, "anat")
         entries = os.listdir(anat_path)
         directories = [
@@ -827,7 +819,7 @@ def read_mpr(data_descrip: dict):
                 mpr_name = mpr_file[:-8]
                 break
         if mpr_folder is None:
-            raise ValueError("Missing parcellation folder for multi-atlas analysis.")
+            raise ValueError("Missing parcellation folder for multi-atlas analysis!")
         data_descrip["Images"][key]["mpr_folder"] = mpr_folder
         data_descrip["Images"][key]["mpr_name"] = mpr_name
 
@@ -841,7 +833,7 @@ def read_roi_lookup_table(roi_lookup_file: str):
     return data
 
 
-def asl_skullstrip(path_mpr: str, name_mpr: str):
+def mricloud_skullstrip(path_mpr: str, name_mpr: str):
     mVol, mpr = load_img(os.path.join(path_mpr, f"{name_mpr}.img"))
     roi_lookup_all = read_roi_lookup_table(
         os.path.join(path_mpr, "multilevel_lookup_table.txt")
@@ -862,10 +854,11 @@ def asl_skullstrip(path_mpr: str, name_mpr: str):
     return mpr_brain_file
 
 
-def coreg_mpr(data_descrip: dict):
+def mricloud_coreg_mpr(data_descrip: dict):
+    print("MRICloud: Coregister ASL data to structural image...")
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
-        target = asl_skullstrip(
+        target = mricloud_skullstrip(
             os.path.join(key, "anat", value["mpr_folder"]), value["mpr_name"]
         )
         for asl_file in value["asl"]:
@@ -878,9 +871,9 @@ def coreg_mpr(data_descrip: dict):
             other3 = os.path.join(key, "perf", "brnmsk_clcu.nii")
             other4 = os.path.join(key, "perf", f"{asl_file}_ATT_native.nii")
             if data_descrip["SingleDelay"]:
-                asl_coreg(target, source, [other1, other2, other3])
+                img_coreg(target, source, [other1, other2, other3])
             else:
-                asl_coreg(target, source, [other1, other2, other3, other4])
+                img_coreg(target, source, [other1, other2, other3, other4])
             os.rename(
                 os.path.join(key, "perf", f"r{asl_file}_aCBF_native.nii"),
                 os.path.join(key, "perf", f"{asl_file}_aCBF_mpr.nii"),
@@ -923,7 +916,8 @@ def read_roi_lists_info(roi_stats_file: str, roitypes: list):
     return tmpinfo
 
 
-def asl_t1roi_CBFaverage(data_descrip: dict):
+def mricloud_t1roi_CBFaverage(data_descrip: dict):
+    print("MRICloud: Calculate ROI average CBF...")
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
         roi_lookup_file = os.path.join(
@@ -940,12 +934,18 @@ def asl_t1roi_CBFaverage(data_descrip: dict):
         roi_stats_file = files[0]
         roitypes = ["Type1-L2", "Type1-L3", "Type1-L5"]
         roi_lookup_tbl = [4, 3, 1]
-        roi_lists_info = read_roi_lists_info(roi_stats_file, roitypes)
+        roi_lists_info = read_roi_lists_info(
+            os.path.join(key, "anat", value["mpr_folder"], roi_stats_file), roitypes
+        )
         roi_lists_info[2]["count"] = label_num
         roi_lists_info[2]["list"] = roi_lookup_all
 
         regex = re.compile(rf'^{value["mpr_name"]}.*{label_num}.*(?<!MNI)\.img$')
-        files = [f for f in os.listdir(value["mpr_folder"]) if re.match(regex, f)]
+        files = [
+            f
+            for f in os.listdir(os.path.join(key, "anat", value["mpr_folder"]))
+            if re.match(regex, f)
+        ]
         roimaskfile = files[0]
         V0, mskv = load_img(os.path.join(key, "anat", value["mpr_folder"], roimaskfile))
 
@@ -973,17 +973,20 @@ def asl_t1roi_CBFaverage(data_descrip: dict):
                                 segmask[mskv == (kk + 1)] = ii + 1
 
                     segmask_img = nib.Nifti1Image(segmask, V0.affine, V0.header)
+                    segmask_img.header.set_data_dtype(np.int32)
                     segmask_img.to_filename(
-                        key,
-                        "anat",
-                        value["mpr_folder"],
-                        f"{value['mpr_name']}_{seg_num}_segments.nii",
+                        os.path.join(
+                            key,
+                            "anat",
+                            value["mpr_folder"],
+                            f"{value['mpr_name']}_{seg_num}_segments.nii",
+                        )
                     )
 
                     fid.write(coltitle.format(seg_num))
                     fid.write(colnames)
                     for ii in range(seg_num):
-                        idxvox_seg = (segmask == (ii + 1)) & (msk1 > 0.5)
+                        idxvox_seg = np.squeeze(segmask == (ii + 1)) & (msk1 > 0.5)
                         seg_acbf = np.mean(acbf[idxvox_seg])
                         seg_rcbf = np.mean(rcbf[idxvox_seg])
                         seg_nvox = np.sum(idxvox_seg)
@@ -996,37 +999,41 @@ def asl_t1roi_CBFaverage(data_descrip: dict):
                 fid.write(coltitle.format(label_num))
                 fid.write(colnames)
                 for ii in range(label_num):
-                    idxvox_seg = (mskv == (ii + 1)) & (msk1 > 0.5)
+                    idxvox_seg = np.squeeze(mskv == (ii + 1)) & (msk1 > 0.5)
                     seg_acbf = np.mean(acbf[idxvox_seg])
                     seg_rcbf = np.mean(rcbf[idxvox_seg])
                     seg_nvox = np.sum(idxvox_seg)
-                    seg_name = roi_lists_info[3]["list"][ii]
+                    seg_name = roi_lists_info[2]["list"][ii][1]
                     fid.write(
                         f"{ii+1}\t{seg_name}\t{seg_acbf:.2f}\t{seg_rcbf:.2f}\t{seg_nvox}\n"
                     )
 
 
-def asl_mricloud_pipeline(
+def mricloud_pipeline(
     root: str,
     flag_t1: bool,
     t1_tissue: float,
     t1_blood: float,
     part_coef: float,
 ):
+    print("Process ASL images using MRICloud...")
     data_descrip = read_data_description(root)
-    asl_rescale(data_descrip)
+    mricloud_rescale(data_descrip)
 
     if data_descrip["SingleDelay"]:
-        asl_realign(data_descrip)
-        asl_calculate_diffmap(data_descrip)
-        asl_calculate_M0(data_descrip, t1_tissue)
-        asl_calculate_CBF(data_descrip, t1_blood, part_coef)
+        mricloud_realign(data_descrip)
+        mricloud_calculate_diffmap(data_descrip)
+        mricloud_calculate_M0(data_descrip, t1_tissue)
+        mricloud_calculate_CBF(data_descrip, t1_blood, part_coef)
     else:
-        asl_calculate_diffmap(data_descrip)
-        asl_multidelay_calculate_M0(data_descrip)
-        asl_multidelay_calculate_CBFATT(data_descrip, t1_blood, part_coef)
+        mricloud_calculate_diffmap(data_descrip)
+        mricloud_multidelay_calculate_M0(data_descrip)
+        mricloud_multidelay_calculate_CBFATT(data_descrip, t1_blood, part_coef)
 
     if flag_t1:
         data_descrip = read_mpr(data_descrip)
-        coreg_mpr(data_descrip)
-        asl_t1roi_CBFaverage(data_descrip)
+        mricloud_coreg_mpr(data_descrip)
+        mricloud_t1roi_CBFaverage(data_descrip)
+
+    print("Processing complete!")
+    print(f"Please see results under {os.path.join(root,'derivatives')}.")

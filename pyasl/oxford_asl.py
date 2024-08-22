@@ -62,22 +62,25 @@ def run_oxford_asl(
         or data_descrip["ArterialSpinLabelingType"] == "pCASL"
     ):
         cmd += ["--casl"]
-    tis = np.array(data_descrip["PostLabelingDelay"])
-    bolus = data_descrip["LabelingDuration"]
-    tis += bolus
+        tis = np.array([t for t in data_descrip["PLDList"] if t != 0]) / 1000.0
+        bolus = data_descrip["LabelingDuration"] / 1000.0
+        tis += bolus
+    elif data_descrip["ArterialSpinLabelingType"] == "PASL":
+        tis = np.array([t for t in data_descrip["PLDList"] if t != 0]) / 1000.0
+        bolus = data_descrip["TI1"] / 1000.0
     tis_str = ",".join(map(str, tis))
     cmd += ["--tis", tis_str]
-    cmd += ["--bolus", bolus]
+    cmd += ["--bolus", str(bolus)]
     if "SliceDuration" in data_descrip:
-        cmd += ["--slicedt", data_descrip["SliceDuration"]]
+        cmd += ["--slicedt", str(data_descrip["SliceDuration"] / 1000.0)]
     if bat is not None:
-        cmd += ["--bat", bat]
+        cmd += ["--bat", str(bat)]
     if t1 is not None:
-        cmd += ["--t1", t1]
+        cmd += ["--t1", str(t1)]
     if t1b is not None:
-        cmd += ["--t1b", t1b]
+        cmd += ["--t1b", str(t1b)]
     if sliceband is not None:
-        cmd += ["--sliceband", sliceband]
+        cmd += ["--sliceband", str(sliceband)]
     if useCalibration:
         if cmethod == "single" and not useStructural:
             raise ValueError(
@@ -97,19 +100,22 @@ def run_oxford_asl(
         for asl_file in value["asl"]:
 
             if data_descrip["M0Type"] == "Included":
-                asl_path, m0_path = split_asl_m0(asl_file, data_descrip["ASLContext"])
+                asl_path, m0_path = split_asl_m0(
+                    os.path.join(key, "perf", asl_file), data_descrip["ASLContext"]
+                )
                 cmd += ["-i", asl_path]
                 if useCalibration:
                     cmd += ["-c", m0_path]
-                    cmd += ["--tr", data_descrip["M0"]["RepetitionTime"]]
-                    cmd += ["--alpha", data_descrip["InversionEfficiency"]]
+                    cmd += ["--tr", str(data_descrip["M0"]["RepetitionTime"] / 1000.0)]
+                    cmd += ["--alpha", str(data_descrip["InversionEfficiency"])]
             else:
                 cmd += ["-i", os.path.join(key, "perf", asl_file)]
                 if useCalibration:
                     cmd += ["-c", os.path.join(key, "perf", value["M0"])]
-                    cmd += ["--tr", data_descrip["M0"]["RepetitionTime"]]
-                    cmd += ["--alpha", data_descrip["InversionEfficiency"]]
+                    cmd += ["--tr", str(data_descrip["M0"]["RepetitionTime"] / 1000.0)]
+                    cmd += ["--alpha", str(data_descrip["InversionEfficiency"])]
 
             key_der = key.replace("rawdata", "derivatives")
             cmd += ["-o", key_der]
             subprocess.run(cmd)
+    print(f"Please see results under {os.path.join(root,'derivatives')}.")

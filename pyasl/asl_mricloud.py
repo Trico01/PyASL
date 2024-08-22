@@ -138,7 +138,7 @@ def img_coreg(target: str, source: str, other=[]):
     coreg.run()
 
 
-def inbrain(imgvol: np.ndarray, thre: float, ero_lyr: int, dlt_lyr: int):
+def mricloud_inbrain(imgvol: np.ndarray, thre: float, ero_lyr: int, dlt_lyr: int):
     lowb = 0.25
     highb = 0.75
 
@@ -222,15 +222,15 @@ def mricloud_getBrainMask(imgtpm: str, imgfile: str):
         brnmsk_dspl = mask & brnmsk_realign
     else:
         thre = 0.5
-        mask1 = inbrain(imgvol, thre, 2, 1)
-        mask2 = inbrain(imgvol, thre, 2, 2)
+        mask1 = mricloud_inbrain(imgvol, thre, 2, 1)
+        mask2 = mricloud_inbrain(imgvol, thre, 2, 2)
         brnmsk_clcu = mask1 & brnmsk_realign
         brnmsk_dspl = mask2 & brnmsk_realign
 
     return brnmsk_dspl, brnmsk_clcu
 
 
-def bgs_factor(mz0: float, t1_tissue: float, flip: list, timing: list, inv_eff: float):
+def mricloud_bgs_factor(mz0: float, t1_tissue: float, flip: list, timing: list, inv_eff: float):
     mz = mz0
     for ii in range(len(flip) - 1):
         slot = np.arange(1, timing[ii + 1] - timing[ii] + 1)
@@ -328,7 +328,7 @@ def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float):
                     else:
                         timing = [0, totdur]
                     flip = [0, 0]
-                    bgs_f = bgs_factor(0.0, t1_tissue, flip, timing, 1)
+                    bgs_f = mricloud_bgs_factor(0.0, t1_tissue, flip, timing, 1)
                 else:
                     if data_descrip["MRAcquisitionType"] == "2D":
                         timing = (
@@ -351,7 +351,7 @@ def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float):
                         * (len(data_descrip["BackgroundSuppressionPulseTime"]) - 1)
                         + [0]
                     )
-                    bgs_f = bgs_factor(
+                    bgs_f = mricloud_bgs_factor(
                         0.0,
                         t1_tissue,
                         flip,
@@ -794,7 +794,7 @@ def mricloud_multidelay_calculate_CBFATT(
             att_img.to_filename(os.path.join(key, "perf", f"{asl_file}_ATT_native.nii"))
 
 
-def read_mpr(data_descrip: dict):
+def mricloud_read_mpr(data_descrip: dict):
     for key, value in data_descrip["Images"].items():
         key_der = key.replace("rawdata", "derivatives")
         if not value["anat"]:
@@ -826,7 +826,7 @@ def read_mpr(data_descrip: dict):
     return data_descrip
 
 
-def read_roi_lookup_table(roi_lookup_file: str):
+def mricloud_read_roi_lookup_table(roi_lookup_file: str):
     with open(roi_lookup_file, "r") as file:
         titles = file.readline()
         data = [line.split() for line in file]
@@ -835,7 +835,7 @@ def read_roi_lookup_table(roi_lookup_file: str):
 
 def mricloud_skullstrip(path_mpr: str, name_mpr: str):
     mVol, mpr = load_img(os.path.join(path_mpr, f"{name_mpr}.img"))
-    roi_lookup_all = read_roi_lookup_table(
+    roi_lookup_all = mricloud_read_roi_lookup_table(
         os.path.join(path_mpr, "multilevel_lookup_table.txt")
     )
     label_num = len(roi_lookup_all)
@@ -893,7 +893,7 @@ def mricloud_coreg_mpr(data_descrip: dict):
                 )
 
 
-def read_roi_lists_info(roi_stats_file: str, roitypes: list):
+def mricloud_read_roi_lists_info(roi_stats_file: str, roitypes: list):
     with open(roi_stats_file, "r") as file:
         alllines = file.readlines()
     nline = len(alllines)
@@ -923,7 +923,7 @@ def mricloud_t1roi_CBFaverage(data_descrip: dict):
         roi_lookup_file = os.path.join(
             key, "anat", value["mpr_folder"], "multilevel_lookup_table.txt"
         )
-        roi_lookup_all = read_roi_lookup_table(roi_lookup_file)
+        roi_lookup_all = mricloud_read_roi_lookup_table(roi_lookup_file)
         label_num = len(roi_lookup_all)
         regex = re.compile(rf'^{value["mpr_name"]}.*{label_num}.*MNI_stats\.txt$')
         files = [
@@ -934,18 +934,12 @@ def mricloud_t1roi_CBFaverage(data_descrip: dict):
         roi_stats_file = files[0]
         roitypes = ["Type1-L2", "Type1-L3", "Type1-L5"]
         roi_lookup_tbl = [4, 3, 1]
-        roi_lists_info = read_roi_lists_info(
-            os.path.join(key, "anat", value["mpr_folder"], roi_stats_file), roitypes
-        )
+        roi_lists_info = mricloud_read_roi_lists_info(os.path.join(key, "anat", value["mpr_folder"],roi_stats_file), roitypes)
         roi_lists_info[2]["count"] = label_num
         roi_lists_info[2]["list"] = roi_lookup_all
 
         regex = re.compile(rf'^{value["mpr_name"]}.*{label_num}.*(?<!MNI)\.img$')
-        files = [
-            f
-            for f in os.listdir(os.path.join(key, "anat", value["mpr_folder"]))
-            if re.match(regex, f)
-        ]
+        files = [f for f in os.listdir(os.path.join(key, "anat",value["mpr_folder"])) if re.match(regex, f)]
         roimaskfile = files[0]
         V0, mskv = load_img(os.path.join(key, "anat", value["mpr_folder"], roimaskfile))
 
@@ -975,12 +969,10 @@ def mricloud_t1roi_CBFaverage(data_descrip: dict):
                     segmask_img = nib.Nifti1Image(segmask, V0.affine, V0.header)
                     segmask_img.header.set_data_dtype(np.int32)
                     segmask_img.to_filename(
-                        os.path.join(
-                            key,
-                            "anat",
-                            value["mpr_folder"],
-                            f"{value['mpr_name']}_{seg_num}_segments.nii",
-                        )
+                        os.path.join(key,
+                        "anat",
+                        value["mpr_folder"],f"{value['mpr_name']}_{seg_num}_segments.nii")
+                        
                     )
 
                     fid.write(coltitle.format(seg_num))
@@ -1031,9 +1023,9 @@ def mricloud_pipeline(
         mricloud_multidelay_calculate_CBFATT(data_descrip, t1_blood, part_coef)
 
     if flag_t1:
-        data_descrip = read_mpr(data_descrip)
+        data_descrip = mricloud_read_mpr(data_descrip)
         mricloud_coreg_mpr(data_descrip)
         mricloud_t1roi_CBFaverage(data_descrip)
-
+    
     print("Processing complete!")
     print(f"Please see results under {os.path.join(root,'derivatives')}.")

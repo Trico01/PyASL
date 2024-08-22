@@ -11,7 +11,7 @@ def img_reset_orientation(source_path: str, target_path: str):
     vox = np.sqrt(np.sum(M[:3, :3] ** 2, axis=0))
     if np.linalg.det(M[:3, :3]) < 0:
         vox[0] = -vox[0]
-    orig = np.array(V.shape[:3] + 1) / 2
+    orig = (np.array(V.shape[:3]) + 1) / 2
     off = -vox * orig
     M = np.array(
         [
@@ -26,7 +26,8 @@ def img_reset_orientation(source_path: str, target_path: str):
     nib.save(V, target_path)
 
 
-def reset_orientation(data_descrip: dict):
+def asltbx_reset_orientation(data_descrip: dict):
+    print("ASLtbx: Reset image orientation...")
     for key, value in data_descrip["Images"].items():
         for asl_file in value["asl"]:
             asl_path = os.path.join(key, "perf", f"{asl_file}.nii")
@@ -46,9 +47,8 @@ def reset_orientation(data_descrip: dict):
             img_reset_orientation(anat_path, anat_der_path)
 
 
-def realign(data_descrip: dict):
-    print("pyasl: Realign ASL data...")
-
+def asltbx_realign(data_descrip: dict):
+    print("ASLtbx: Realign ASL data...")
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
         for asl_file in value["asl"]:
@@ -70,7 +70,8 @@ def realign(data_descrip: dict):
             realign.run()
 
 
-def coregister(data_descrip: dict):
+def asltbx_coregister(data_descrip: dict):
+    print("ASLtbx: Coregister ASL data...")
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
         PG = os.path.join(key, "anat", f"{value['anat']}.nii")
@@ -88,7 +89,8 @@ def coregister(data_descrip: dict):
             coreg.run()
 
 
-def smooth(data_descrip: dict, fwhm: list):
+def asltbx_smooth(data_descrip: dict, fwhm: list):
+    print("ASLtbx: Smooth ASL data...")
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
         P = []
@@ -106,13 +108,14 @@ def smooth(data_descrip: dict, fwhm: list):
         smooth.run()
 
 
-def create_mask(data_descrip: dict):
+def asltbx_create_mask(data_descrip: dict, thres: float):
+    print("ASLtbx: Create brain mask...")
     for key, value in data_descrip["Images"].items():
         key = key.replace("rawdata", "derivatives")
         for asl_file in value["asl"]:
             PF = os.path.join(key, "perf", f"srmean{asl_file}.nii")
             V, data = load_img(PF)
-            mask = data > 0.2 * np.max(data)
+            mask = data > thres * np.max(data)
             header = V.header.copy()
             header.set_data_dtype(np.int16)
             mask_img = nib.Nifti1Image(mask, V.affine, header)
@@ -121,7 +124,7 @@ def create_mask(data_descrip: dict):
             )
 
 
-def sinc_interpVec(x: np.ndarray, u: float):
+def asltbx_sinc_interpVec(x: np.ndarray, u: float):
     dim, lenx = x.shape
     u = np.tile(u, (dim, 1))
     m = np.tile(np.arange(lenx), (dim, 1))
@@ -135,11 +138,10 @@ def sinc_interpVec(x: np.ndarray, u: float):
     return y
 
 
-def perf_subtract(
+def asltbx_perf_subtract(
     data_descrip: dict,
     QuantFlag,
     M0wmcsf,
-    labeff,
     MaskFlag,
     MeanFlag,
     BOLDFlag,
@@ -148,6 +150,7 @@ def perf_subtract(
     SubtrationOrder,
     Timeshift,
 ):
+    print("ASLtbx: Calculate CBF maps...")
     qTI = 0.85
     Rwm = 1.19  # 1.06 in Wong 97. 1.19 in Cavosuglu 09, Proton density ratio between blood and WM;
     # needed only for AslType=0 (PASL) with QuantFlag=1 (unique M0 based quantification)
@@ -273,9 +276,11 @@ def perf_subtract(
                         normloc = 2 + Timeshift
                     idx[idx < 0] = 0
                     idx[idx > perfno - 1] = perfno - 1
-                    nimg = alldat[:, :, :, conidx[idx]]
+                    idx_arr = np.array(idx).astype(int)
+                    conidx_arr = np.array(conidx).astype(int)
+                    nimg = alldat[:, :, :, conidx_arr[idx_arr]]
                     nimg = np.reshape(nimg, (-1, nimg.shape[3]))
-                    tmpimg = sinc_interpVec(nimg[brain_ind, :], normloc)
+                    tmpimg = asltbx_sinc_interpVec(nimg[brain_ind, :], normloc)
                     Vconimg = np.zeros(nimg.shape[0])
                     Vconimg[brain_ind] = tmpimg
                     Vconimg = np.reshape(Vconimg, alldat.shape[:3])
@@ -393,11 +398,12 @@ def perf_subtract(
                     multi_idx = np.unravel_index(vxidx, cbfimg.shape)
                     cbfimg[multi_idx] = tcbf
 
-                CBFimg4D[:, :, :, i] = cbfimg
-                perfimg4D[:, :, :, i] = perfimg
+                CBFimg4D[:, :, :, p] = cbfimg
+                perfimg4D[:, :, :, p] = perfimg
 
                 nanmask = np.isnan(cbfimg)
                 outliermask = (cbfimg < -40) | (cbfimg > 150)
+                maskdat = maskdat.astype(bool)
                 sigmask = maskdat & (~outliermask) & (~nanmask)
                 wholemask = maskdat & (~nanmask)
                 outliercleaned_maskind = np.where(sigmask)
@@ -409,7 +415,10 @@ def perf_subtract(
                 gs[p, 2] = np.mean(perfimg[whole_ind])
 
             np.savetxt(
-                os.path.join(key, "perf", f"{asl_file}_globalsg.txt"), gs, fmt="%0.5f"
+                os.path.join(key, "perf", f"{asl_file}_globalsg.txt"),
+                gs,
+                fmt="%0.5f",
+                header="Perf_outliercleaned,CBF_outliercleaned,Perf_whole,CBF_whole",
             )
 
             header = Vall.header.copy()
@@ -450,6 +459,7 @@ def perf_subtract(
 def asltbx_pipeline(
     root: str,
     smooth_fwhm=[6, 6, 6],
+    mask_thres=0.1,
     QuantFlag=1,
     M0wmcsf=None,
     MaskFlag=True,
@@ -460,13 +470,14 @@ def asltbx_pipeline(
     SubtrationOrder=1,
     Timeshift=0.5,
 ):
+    print("Process ASL images using ASLtbx...")
     data_descrip = read_data_description(root)
-    reset_orientation(data_descrip)
-    realign(data_descrip)
-    coregister(data_descrip)
-    smooth(data_descrip, smooth_fwhm)
-    create_mask(data_descrip)
-    perf_subtract(
+    asltbx_reset_orientation(data_descrip)
+    asltbx_realign(data_descrip)
+    asltbx_coregister(data_descrip)
+    asltbx_smooth(data_descrip, smooth_fwhm)
+    asltbx_create_mask(data_descrip, mask_thres)
+    asltbx_perf_subtract(
         data_descrip,
         QuantFlag,
         M0wmcsf,
@@ -478,3 +489,5 @@ def asltbx_pipeline(
         SubtrationOrder,
         Timeshift,
     )
+    print("Processing complete!")
+    print(f"Please see results under {os.path.join(root,'derivatives')}.")

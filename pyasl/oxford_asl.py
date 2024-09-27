@@ -118,4 +118,9 @@ def run_oxford_asl(
             key_der = key.replace("rawdata", "derivatives")
             cmd += ["-o", key_der]
             subprocess.run(cmd)
+
+            with open(os.path.join(key_der, "config.txt"), "w") as f:
+                f.write(
+                    f"run_oxford_asl(root='{root}', useStructural={useStructural}, useCalibration={useCalibration}, cmethod='{cmethod}', wp={wp}, mc={mc}, bat={bat}, t1={t1}, t1b={t1b}, sliceband={sliceband})"
+                )
     print(f"Please see results under {os.path.join(root,'derivatives')}.")

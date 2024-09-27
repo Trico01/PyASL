@@ -557,5 +557,10 @@ def preclinical_singleTE_pipeline(
     aslave = np.sum(relCBF * brain_mask) / np.sum(brain_mask)
     print(f"The averaged ASL signal is: {aslave}%")
 
+    with open(os.path.join(savedir, "config.txt"), "w") as f:
+        f.write(
+            f"preclinical_singleTE_pipeline(root='{root}', keyword='{keyword}', control_first={control_first}, SGap={SGap}, T1blood={T1blood}, relCBF_vmax={relCBF_vmax}, mask_thres={mask_thres})"
+        )
+
     print("Processing complete!")
     print(f"Please see results under {savedir}.")

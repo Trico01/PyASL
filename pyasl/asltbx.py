@@ -119,6 +119,7 @@ def asltbx_create_mask(data_descrip: dict, thres: float):
             header = V.header.copy()
             header.set_data_dtype(np.int16)
             mask_img = nib.Nifti1Image(mask, V.affine, header)
+            mask_img.header["descrip"] = b"asltbx_pipeline"
             mask_img.to_filename(
                 os.path.join(key, "perf", f"{asl_file}_mask_perf_cbf.nii")
             )
@@ -425,14 +426,17 @@ def asltbx_perf_subtract(
             affine = Vall.affine.copy()
             header.set_data_shape(CBFimg4D.shape)
             VCBFimg = nib.Nifti1Image(CBFimg4D, affine, header)
+            VCBFimg.header["descrip"] = b"asltbx_pipeline"
             VCBFimg.to_filename(os.path.join(key, "perf", f"{asl_file}_CBF.nii"))
 
             if BOLDFlag:
                 VBOLDimg = nib.Nifti1Image(BOLDimg4D, affine, header)
+                VBOLDimg.header["descrip"] = b"asltbx_pipeline"
                 VBOLDimg.to_filename(os.path.join(key, "perf", f"{asl_file}_BOLD.nii"))
 
             if PerfFlag:
                 Vperfimg = nib.Nifti1Image(perfimg4D, affine, header)
+                Vperfimg.header["descrip"] = b"asltbx_pipeline"
                 Vperfimg.to_filename(os.path.join(key, "perf", f"{asl_file}_PERF.nii"))
 
             if MeanFlag:
@@ -441,16 +445,19 @@ def asltbx_perf_subtract(
                 header.set_data_dtype(np.float32)
                 mCBFimg = np.mean(CBFimg4D, axis=3)
                 VmCBFimg = nib.Nifti1Image(mCBFimg, affine, header)
+                VmCBFimg.header["descrip"] = b"asltbx_pipeline"
                 VmCBFimg.to_filename(os.path.join(key, "perf", f"{asl_file}_mCBF.nii"))
                 if PerfFlag:
                     mPERFimg = np.mean(perfimg4D, axis=3)
                     VmPERFimg = nib.Nifti1Image(mPERFimg, affine, header)
+                    VmPERFimg.header["descrip"] = b"asltbx_pipeline"
                     VmPERFimg.to_filename(
                         os.path.join(key, "perf", f"{asl_file}_mPERF.nii")
                     )
                 if BOLDFlag:
                     mBOLDimg = np.mean(BOLDimg4D, axis=3)
                     VmBOLDimg = nib.Nifti1Image(mBOLDimg, affine, header)
+                    VmBOLDimg.header["descrip"] = b"asltbx_pipeline"
                     VmBOLDimg.to_filename(
                         os.path.join(key, "perf", f"{asl_file}_mBOLD.nii")
                     )

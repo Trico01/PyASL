@@ -102,6 +102,8 @@ def dlasl_pipeline(root: str, model_selection=1, pattern=".*_CBF\.(nii|nii\.gz)$
             mask[mask > 0] = 1
             x_ = x_ * mask
             x_nii = nib.Nifti1Image(x_, vitem.affine, vitem.header)
+            descrip_str = f"dlasl_pipeline, model_selection={model_selection}"
+            x_nii.header["descrip"] = descrip_str.encode()
             x_nii.to_filename(os.path.join(key, "perf", f"denoised_{cbf_file}"))
 
     print("Processing complete!")

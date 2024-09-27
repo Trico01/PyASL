@@ -230,7 +230,9 @@ def mricloud_getBrainMask(imgtpm: str, imgfile: str):
     return brnmsk_dspl, brnmsk_clcu
 
 
-def mricloud_bgs_factor(mz0: float, t1_tissue: float, flip: list, timing: list, inv_eff: float):
+def mricloud_bgs_factor(
+    mz0: float, t1_tissue: float, flip: list, timing: list, inv_eff: float
+):
     mz = mz0
     for ii in range(len(flip) - 1):
         slot = np.arange(1, timing[ii + 1] - timing[ii] + 1)
@@ -367,11 +369,14 @@ def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float):
         header = V_ctrl.header.copy()
         header.set_data_dtype(np.float32)
         m0map_final_img = nib.Nifti1Image(m0map_final, V_ctrl.affine, header)
+        m0map_final_img.header["descrip"] = b"mricloud_pipeline"
         m0map_final_img.to_filename(os.path.join(key, "perf", "M0map.nii"))
         header.set_data_dtype(np.int16)
         brnmsk_dspl_img = nib.Nifti1Image(brnmsk_dspl, V_ctrl.affine, header)
+        brnmsk_dspl_img.header["descrip"] = b"mricloud_pipeline"
         brnmsk_dspl_img.to_filename(os.path.join(key, "perf", "brnmsk_dspl.nii"))
         brnmsk_clcu_img = nib.Nifti1Image(brnmsk_clcu, V_ctrl.affine, header)
+        brnmsk_clcu_img.header["descrip"] = b"mricloud_pipeline"
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
@@ -440,10 +445,12 @@ def mricloud_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float
 
             header = V_diff.header.copy()
             acbf_img = nib.Nifti1Image(cbf_thr, V_diff.affine, header)
+            acbf_img.header["descrip"] = b"mricloud_pipeline"
             acbf_img.to_filename(
                 os.path.join(key, "perf", f"{asl_file}_aCBF_native.nii")
             )
             rcbf_img = nib.Nifti1Image(rcbf_thr, V_diff.affine, header)
+            rcbf_img.header["descrip"] = b"mricloud_pipeline"
             rcbf_img.to_filename(
                 os.path.join(key, "perf", f"{asl_file}_rCBF_native.nii")
             )
@@ -594,11 +601,14 @@ def mricloud_multidelay_calculate_M0(data_descrip: dict):
         header = V_ctrl.header.copy()
         header.set_data_dtype(np.float32)
         m0map_final_img = nib.Nifti1Image(m0map_final, V_ctrl.affine, header)
+        m0map_final_img.header["descrip"] = b"mricloud_pipeline"
         m0map_final_img.to_filename(os.path.join(key, "perf", "M0map.nii"))
         header.set_data_dtype(np.int16)
         brnmsk_dspl_img = nib.Nifti1Image(brnmsk_dspl, V_ctrl.affine, header)
+        brnmsk_dspl_img.header["descrip"] = b"mricloud_pipeline"
         brnmsk_dspl_img.to_filename(os.path.join(key, "perf", "brnmsk_dspl.nii"))
         brnmsk_clcu_img = nib.Nifti1Image(brnmsk_clcu, V_ctrl.affine, header)
+        brnmsk_clcu_img.header["descrip"] = b"mricloud_pipeline"
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
@@ -783,14 +793,17 @@ def mricloud_multidelay_calculate_CBFATT(
             header = V_m0map.header.copy()
             affine = V_m0map.affine.copy()
             acbf_img = nib.Nifti1Image(cbfmap, affine, header)
+            acbf_img.header["descrip"] = b"mricloud_pipeline"
             acbf_img.to_filename(
                 os.path.join(key, "perf", f"{asl_file}_aCBF_native.nii")
             )
             rcbf_img = nib.Nifti1Image(rcbfmap, affine, header)
+            rcbf_img.header["descrip"] = b"mricloud_pipeline"
             rcbf_img.to_filename(
                 os.path.join(key, "perf", f"{asl_file}_rCBF_native.nii")
             )
             att_img = nib.Nifti1Image(attmap, affine, header)
+            att_img.header["descrip"] = b"mricloud_pipeline"
             att_img.to_filename(os.path.join(key, "perf", f"{asl_file}_ATT_native.nii"))
 
 
@@ -849,6 +862,7 @@ def mricloud_skullstrip(path_mpr: str, name_mpr: str):
             brainmask[allmask == (ii + 1)] = 1
     mpr_brain_data = mpr * brainmask
     mpr_brain_img = nib.Nifti1Image(mpr_brain_data, mVol.affine, mVol.header)
+    mpr_brain_img.header["descrip"] = b"mricloud_pipeline"
     mpr_brain_file = os.path.join(path_mpr, f"{name_mpr}_brain.nii")
     mpr_brain_img.to_filename(mpr_brain_file)
     return mpr_brain_file
@@ -934,12 +948,18 @@ def mricloud_t1roi_CBFaverage(data_descrip: dict):
         roi_stats_file = files[0]
         roitypes = ["Type1-L2", "Type1-L3", "Type1-L5"]
         roi_lookup_tbl = [4, 3, 1]
-        roi_lists_info = mricloud_read_roi_lists_info(os.path.join(key, "anat", value["mpr_folder"],roi_stats_file), roitypes)
+        roi_lists_info = mricloud_read_roi_lists_info(
+            os.path.join(key, "anat", value["mpr_folder"], roi_stats_file), roitypes
+        )
         roi_lists_info[2]["count"] = label_num
         roi_lists_info[2]["list"] = roi_lookup_all
 
         regex = re.compile(rf'^{value["mpr_name"]}.*{label_num}.*(?<!MNI)\.img$')
-        files = [f for f in os.listdir(os.path.join(key, "anat",value["mpr_folder"])) if re.match(regex, f)]
+        files = [
+            f
+            for f in os.listdir(os.path.join(key, "anat", value["mpr_folder"]))
+            if re.match(regex, f)
+        ]
         roimaskfile = files[0]
         V0, mskv = load_img(os.path.join(key, "anat", value["mpr_folder"], roimaskfile))
 
@@ -967,12 +987,15 @@ def mricloud_t1roi_CBFaverage(data_descrip: dict):
                                 segmask[mskv == (kk + 1)] = ii + 1
 
                     segmask_img = nib.Nifti1Image(segmask, V0.affine, V0.header)
+                    segmask_img.header["descrip"] = b"mricloud_pipeline"
                     segmask_img.header.set_data_dtype(np.int32)
                     segmask_img.to_filename(
-                        os.path.join(key,
-                        "anat",
-                        value["mpr_folder"],f"{value['mpr_name']}_{seg_num}_segments.nii")
-                        
+                        os.path.join(
+                            key,
+                            "anat",
+                            value["mpr_folder"],
+                            f"{value['mpr_name']}_{seg_num}_segments.nii",
+                        )
                     )
 
                     fid.write(coltitle.format(seg_num))
@@ -1026,6 +1049,6 @@ def mricloud_pipeline(
         data_descrip = mricloud_read_mpr(data_descrip)
         mricloud_coreg_mpr(data_descrip)
         mricloud_t1roi_CBFaverage(data_descrip)
-    
+
     print("Processing complete!")
     print(f"Please see results under {os.path.join(root,'derivatives')}.")

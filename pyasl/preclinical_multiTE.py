@@ -95,4 +95,13 @@ def preclinical_multiTE_pipeline(
     else:
         np.save(os.path.join(save_dir, "CBF.npy"), CBF)
         plt.savefig(os.path.join(save_dir, "curvefit.png"))
+        with open(os.path.join(save_dir, "config.txt"), "w") as f:
+            if mask_array is None:
+                f.write(
+                    f"preclinical_multiTE_pipeline(data, sel_index={sel_index}, glo_index={glo_index}, TE_list={TE_list}, mask_array=None, save_dir='{save_dir}')"
+                )
+            else:
+                f.write(
+                    f"preclinical_multiTE_pipeline(data, sel_index={sel_index}, glo_index={glo_index}, TE_list={TE_list}, mask_array, save_dir='{save_dir}')"
+                )
         return CBF

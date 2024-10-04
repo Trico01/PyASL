@@ -1,6 +1,7 @@
 # PyASL: Composite Python Library for ASL Image Processing
 <p align="center">
   <img src="https://github.com/Trico01/pyasl/blob/main/docs/gsoc_logo.svg" alt="Google Summer of Code" height="50"/>
+  &nbsp;&nbsp;
   <img src="https://github.com/Trico01/pyasl/blob/main/docs/osipi_logo.png" alt="OSIPI" height="70"/>
 </p>
 

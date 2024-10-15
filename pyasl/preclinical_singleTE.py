@@ -425,6 +425,7 @@ def preclinical_singleTE_pipeline(
     pCASL_file = os.path.join(root, "pCASL.txt")
     if os.path.exists(pCASL_file):
         expno = np.loadtxt(pCASL_file, dtype=int)
+        expno = np.atleast_1d(expno).tolist()
     else:
         expno = W_FindScan(root, keyword)
         if len(expno) == 0:
@@ -516,7 +517,7 @@ def preclinical_singleTE_pipeline(
             AdjList = np.arange(Para["slicenum"] + 1)
             AdjList = AdjList.reshape(2, -1).T.ravel()[:-1]
         else:
-            AdjList = np.arange(Para["slicenum"]).reshape(2, -1).T.ravel()[:-1]
+            AdjList = np.arange(Para["slicenum"]).reshape(2, -1).T.ravel()
         AdjList = SGap * AdjList
         AdjF = np.exp(AdjList / T1blood)
         print("Across-slice PLD correction:")

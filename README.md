@@ -28,4 +28,4 @@ This library is part of the ISMRM 2025 submission:
 
 
 ## License
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License – see the [LICENSE](https://github.com/Trico01/PyASL/blob/main/LICENSE) file for details.

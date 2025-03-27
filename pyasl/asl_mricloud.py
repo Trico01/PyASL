@@ -318,18 +318,25 @@ def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float, bgs_eff):
             nslice = ctrlvol.shape[2]
             if data_descrip["ArterialSpinLabelingType"] == "PCASL":
                 totdur = (
-                    data_descrip["LabelingDuration"]*1000
-                    + list(set([x*1000.0 for x in data_descrip["PLDList"] if x != 0]))[0]
+                    data_descrip["LabelingDuration"] * 1000
+                    + list(
+                        set([x * 1000.0 for x in data_descrip["PLDList"] if x != 0])
+                    )[0]
                 )
             elif data_descrip["ArterialSpinLabelingType"] == "PASL":
                 totdur = (
-                    data_descrip["BolusCutOffDelayTime"]*1000
-                    + list(set([x*1000.0 for x in data_descrip["PLDList"] if x != 0]))[0]
+                    data_descrip["BolusCutOffDelayTime"] * 1000
+                    + list(
+                        set([x * 1000.0 for x in data_descrip["PLDList"] if x != 0])
+                    )[0]
                 )
             for kk in range(nslice):
                 if not data_descrip["BackgroundSuppression"]:
                     if data_descrip["MRAcquisitionType"] == "2D":
-                        timing = [0, totdur + data_descrip["SliceDuration"]*1000 * (kk - 1)]
+                        timing = [
+                            0,
+                            totdur + data_descrip["SliceDuration"] * 1000 * (kk - 1),
+                        ]
                     else:
                         timing = [0, totdur]
                     flip = [0, 0]
@@ -338,17 +345,31 @@ def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float, bgs_eff):
                     if data_descrip["MRAcquisitionType"] == "2D":
                         timing = (
                             [0]
-                            + [x*1000 for x in data_descrip["BackgroundSuppressionPulseTime"][:-1]]
                             + [
-                                data_descrip["BackgroundSuppressionPulseTime"][-1]*1000
-                                + data_descrip["SliceDuration"]*1000 * (kk - 1)
+                                x * 1000
+                                for x in data_descrip["BackgroundSuppressionPulseTime"][
+                                    :-1
+                                ]
+                            ]
+                            + [
+                                data_descrip["BackgroundSuppressionPulseTime"][-1]
+                                * 1000
+                                + data_descrip["SliceDuration"] * 1000 * (kk - 1)
                             ]
                         )
                     else:
                         timing = (
                             [0]
-                            + [x*1000 for x in data_descrip["BackgroundSuppressionPulseTime"][:-1]]
-                            + [data_descrip["BackgroundSuppressionPulseTime"][-1]*1000]
+                            + [
+                                x * 1000
+                                for x in data_descrip["BackgroundSuppressionPulseTime"][
+                                    :-1
+                                ]
+                            ]
+                            + [
+                                data_descrip["BackgroundSuppressionPulseTime"][-1]
+                                * 1000
+                            ]
                         )
                     flip = (
                         [0]
@@ -383,7 +404,9 @@ def mricloud_calculate_M0(data_descrip: dict, t1_tissue: float, bgs_eff):
         brnmsk_clcu_img.to_filename(os.path.join(key, "perf", "brnmsk_clcu.nii"))
 
 
-def mricloud_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float, bgs_eff):
+def mricloud_calculate_CBF(
+    data_descrip: dict, t1_blood: float, part_coef: float, bgs_eff
+):
     print("MRICloud: Calculate CBF...")
 
     for key, value in data_descrip["Images"].items():
@@ -406,27 +429,41 @@ def mricloud_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float
             for kk in range(nslice):
                 if data_descrip["ArterialSpinLabelingType"] == "PCASL":
                     casl_pld = list(
-                        set([x*1000.0 for x in data_descrip["PLDList"] if x != 0])
+                        set([x * 1000.0 for x in data_descrip["PLDList"] if x != 0])
                     )[0]
                     if data_descrip["MRAcquisitionType"] == "3D":
                         spld = casl_pld
                     else:
-                        spld = casl_pld + data_descrip["SliceDuration"]*1000 * (kk - 1)
+                        spld = casl_pld + data_descrip["SliceDuration"] * 1000 * (
+                            kk - 1
+                        )
                     tmpcbf[:, :, kk] = (
                         diff[:, :, kk]
                         * np.exp(spld / t1_blood)
-                        / (1 - np.exp(-data_descrip["LabelingDuration"]*1000 / t1_blood))
+                        / (
+                            1
+                            - np.exp(
+                                -data_descrip["LabelingDuration"] * 1000 / t1_blood
+                            )
+                        )
                         / t1_blood
                     )
 
                 elif data_descrip["ArterialSpinLabelingType"] == "PASL":
-                    pasl_ti = list(set([x*1000.0 for x in data_descrip["PLDList"] if x != 0]))[0]+data_descrip["BolusCutOffDelayTime"]*1000
+                    pasl_ti = (
+                        list(
+                            set([x * 1000.0 for x in data_descrip["PLDList"] if x != 0])
+                        )[0]
+                        + data_descrip["BolusCutOffDelayTime"] * 1000
+                    )
                     if data_descrip["MRAcquisitionType"] == "3D":
                         sti = pasl_ti
                     else:
-                        sti = pasl_ti + data_descrip["SliceDuration"]*1000 * (kk - 1)
+                        sti = pasl_ti + data_descrip["SliceDuration"] * 1000 * (kk - 1)
                     tmpcbf[:, :, kk] = (
-                        diff[:, :, kk] * np.exp(sti / t1_blood) / (data_descrip["BolusCutOffDelayTime"]*1000)
+                        diff[:, :, kk]
+                        * np.exp(sti / t1_blood)
+                        / (data_descrip["BolusCutOffDelayTime"] * 1000)
                     )
 
             m0map[np.abs(m0map) < 1e-6] = np.mean(m0map[brnmsk_clcu])
@@ -434,8 +471,7 @@ def mricloud_calculate_CBF(data_descrip: dict, t1_blood: float, part_coef: float
             brvol = brnmsk_dspl.astype(np.float32)
             if data_descrip["BackgroundSuppression"]:
                 alpha = (
-                    bgs_eff
-                    ** data_descrip["BackgroundSuppressionNumberPulses"]
+                    bgs_eff ** data_descrip["BackgroundSuppressionNumberPulses"]
                 ) * data_descrip["LabelingEfficiency"]
             else:
                 alpha = data_descrip["LabelingEfficiency"]
@@ -544,7 +580,7 @@ def mricloud_multidelay_calculate_M0(data_descrip: dict):
             plds = []
             for i, volume_type in enumerate(data_descrip["ASLContext"]):
                 if volume_type == "label":
-                    plds.append(data_descrip["PLDList"][i]*1000.0)
+                    plds.append(data_descrip["PLDList"][i] * 1000.0)
                 elif volume_type == "control":
                     ctrl_all_list.append(img_all[:, :, :, i])
             plds = np.array(plds)
@@ -564,12 +600,12 @@ def mricloud_multidelay_calculate_M0(data_descrip: dict):
                 for ivox in zip(*idx_msk):
                     islc = ivox[2]
                     if data_descrip["MRAcquisitionType"] == "3D":
-                        xdata = plds + data_descrip["LabelingDuration"]*1000
+                        xdata = plds + data_descrip["LabelingDuration"] * 1000
                     else:
                         xdata = (
                             plds
-                            + data_descrip["LabelingDuration"]*1000
-                            + (islc - 1) * data_descrip["SliceDuration"]*1000
+                            + data_descrip["LabelingDuration"] * 1000
+                            + (islc - 1) * data_descrip["SliceDuration"] * 1000
                         )
                     ydata = ctrl_all[np.ravel_multi_index(ivox, brnmsk_dspl.shape), :]
                     beta1, _ = curve_fit(
@@ -588,9 +624,13 @@ def mricloud_multidelay_calculate_M0(data_descrip: dict):
                 for ivox in zip(*idx_msk):
                     islc = ivox[2]
                     if data_descrip["MRAcquisitionType"] == "3D":
-                        xdata = plds + data_descrip["BolusCutOffDelayTime"]*1000
+                        xdata = plds + data_descrip["BolusCutOffDelayTime"] * 1000
                     else:
-                        xdata = plds + data_descrip["BolusCutOffDelayTime"]*1000 + (islc - 1) * data_descrip["SliceDuration"]*1000
+                        xdata = (
+                            plds
+                            + data_descrip["BolusCutOffDelayTime"] * 1000
+                            + (islc - 1) * data_descrip["SliceDuration"] * 1000
+                        )
                     ydata = ctrl_all[np.ravel_multi_index(ivox, brnmsk_dspl.shape), :]
                     beta1, _ = curve_fit(
                         ff, xdata, ydata, p0=beta_init, bounds=(lowb, uppb)
@@ -724,7 +764,7 @@ def mricloud_multidelay_calculate_CBFATT(
             plds = []
             for i, volume_type in enumerate(data_descrip["ASLContext"]):
                 if volume_type == "label":
-                    plds.append(data_descrip["PLDList"][i]*1000.0)
+                    plds.append(data_descrip["PLDList"][i] * 1000.0)
             plds = np.array(plds) / 1000
 
             paras = {
@@ -780,7 +820,11 @@ def mricloud_multidelay_calculate_CBFATT(
                     if data_descrip["MRAcquisitionType"] == "3D":
                         xdata = plds + data_descrip["BolusCutOffDelayTime"]
                     else:
-                        xdata = plds + data_descrip["BolusCutOffDelayTime"] + (islc - 1) * data_descrip["SliceDuration"]
+                        xdata = (
+                            plds
+                            + data_descrip["BolusCutOffDelayTime"]
+                            + (islc - 1) * data_descrip["SliceDuration"]
+                        )
                     ydata = ndiff[np.ravel_multi_index(ivox, brnmsk_dspl.shape), :]
                     beta1, _ = curve_fit(
                         ff, xdata, ydata, p0=beta_init, bounds=(lowb, uppb)

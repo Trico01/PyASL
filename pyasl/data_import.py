@@ -176,10 +176,14 @@ def read_params(params_json: str, has_structural: bool, is_singledelay: bool):
         asl_params["ArterialSpinLabelingType"] == "PCASL"
         or asl_params["ArterialSpinLabelingType"] == "CASL"
     ):
-        required_asl_keys = ["LabelingDuration",]
+        required_asl_keys = [
+            "LabelingDuration",
+        ]
     elif asl_params["ArterialSpinLabelingType"] == "PASL":
         if is_singledelay:
-            required_asl_keys = ["BolusCutOffDelayTime",]
+            required_asl_keys = [
+                "BolusCutOffDelayTime",
+            ]
         else:
             required_asl_keys = ["BolusCutOffDelayTime", "Looklocker"]
         for key in required_asl_keys:
@@ -263,7 +267,9 @@ def read_params(params_json: str, has_structural: bool, is_singledelay: bool):
     return (True, "", params)
 
 
-def make_sidecar(params: dict, num_volumes: int, is_singledelay: bool, is_labelcontrol: bool):
+def make_sidecar(
+    params: dict, num_volumes: int, is_singledelay: bool, is_labelcontrol: bool
+):
     asl_json_data = params["ASL"].copy()
     structural_json_data = params["anat"].copy()
     m0_json_data = params["M0"].copy()
@@ -274,9 +280,13 @@ def make_sidecar(params: dict, num_volumes: int, is_singledelay: bool, is_labelc
     volume_type = []
     if isinstance(params["ASL"]["PostLabelingDelay"], (list)):
         if is_singledelay:
-            asl_json_data["PostLabelingDelay"]=[x for x in params["ASL"]["PostLabelingDelay"] if x != 0][0]
+            asl_json_data["PostLabelingDelay"] = [
+                x for x in params["ASL"]["PostLabelingDelay"] if x != 0
+            ][0]
         else:
-            asl_json_data["PostLabelingDelay"]=[x for x in params["ASL"]["PostLabelingDelay"] if x != 0]
+            asl_json_data["PostLabelingDelay"] = [
+                x for x in params["ASL"]["PostLabelingDelay"] if x != 0
+            ]
 
         for pld in params["ASL"]["PostLabelingDelay"]:
             if pld == 0:
@@ -300,7 +310,14 @@ def make_sidecar(params: dict, num_volumes: int, is_singledelay: bool, is_labelc
     return asl_json_data, structural_json_data, m0_json_data, tsv_data
 
 
-def convert2bids(root: str, params: dict, img_type: str, has_structural: bool, is_singledelay: bool, is_labelcontrol: bool):
+def convert2bids(
+    root: str,
+    params: dict,
+    img_type: str,
+    has_structural: bool,
+    is_singledelay: bool,
+    is_labelcontrol: bool,
+):
     source_path = os.path.join(root, "rawdata")
     all_session_paths = []
     num_volumes = 0
@@ -335,7 +352,10 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool, i
                 num_volumes = nii_image.shape[-1]
 
             if isinstance(params["ASL"]["PostLabelingDelay"], (list)):
-                if num_volumes != (2 * len(params["ASL"]["PostLabelingDelay"]) - params["ASL"]["PostLabelingDelay"].count(0)):
+                if num_volumes != (
+                    2 * len(params["ASL"]["PostLabelingDelay"])
+                    - params["ASL"]["PostLabelingDelay"].count(0)
+                ):
                     return (
                         False,
                         f"Number of volumes in ASL image does not match PostLabelingDelay parameter",
@@ -431,8 +451,8 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool, i
         data_description_json["anat"] = structural_json_data.copy()
     if params["ASL"]["M0Type"] != "Estimate":
         data_description_json["M0"] = m0_json_data.copy()
-    data_description_json["SingleDelay"]=is_singledelay
-    data_description_json["LabelControl"]=is_labelcontrol
+    data_description_json["SingleDelay"] = is_singledelay
+    data_description_json["LabelControl"] = is_labelcontrol
     data_description_json["Images"] = sessions_dict.copy()
     data_description_json["ASLContext"] = tsv_data["volume_type"].copy()
     data_description_json["PLDList"] = []
@@ -449,7 +469,9 @@ def convert2bids(root: str, params: dict, img_type: str, has_structural: bool, i
     else:
         for volume_type in tsv_data["volume_type"]:
             if volume_type == "label":
-                data_description_json["PLDList"].append(params["ASL"]["PostLabelingDelay"])
+                data_description_json["PLDList"].append(
+                    params["ASL"]["PostLabelingDelay"]
+                )
             else:
                 data_description_json["PLDList"].append(0)
 
@@ -517,7 +539,9 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
                             break
                     data_description_json["PLDList"] = []
                     if isinstance(data_description_json["PostLabelingDelay"], (list)):
-                        PLD_unique = list(set(data_description_json["PostLabelingDelay"]))
+                        PLD_unique = list(
+                            set(data_description_json["PostLabelingDelay"])
+                        )
                         if len(PLD_unique) == 1:
                             data_description_json["SingleDelay"] = True
                         else:
@@ -525,7 +549,9 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
                         j = 0
                         for item in volume_type:
                             if item == "label":
-                                data_description_json["PLDList"].append(data_description_json["PostLabelingDelay"][j])
+                                data_description_json["PLDList"].append(
+                                    data_description_json["PostLabelingDelay"][j]
+                                )
                                 j += 1
                             else:
                                 data_description_json["PLDList"].append(0)
@@ -533,7 +559,9 @@ def read_asl_bids(root: str, img_type: str, has_structural: bool):
                         data_description_json["SingleDelay"] = True
                         for item in volume_type:
                             if item == "label":
-                                data_description_json["PLDList"].append(data_description_json["PostLabelingDelay"])
+                                data_description_json["PLDList"].append(
+                                    data_description_json["PostLabelingDelay"]
+                                )
                             else:
                                 data_description_json["PLDList"].append(0)
                     read_tsv_flag = True
@@ -586,7 +614,9 @@ def create_derivatives_folders(data_descrip: dict):
                 raise OSError(f"Could not create directory: {der_anat_path}.")
 
 
-def load_data(root: str, params_json="", convert=True, is_singledelay=True, is_labelcontrol=True):
+def load_data(
+    root: str, params_json="", convert=True, is_singledelay=True, is_labelcontrol=True
+):
     root = os.path.abspath(root)
     valid, error, img_type, has_structural = check_bids_format(root)
     if not valid:
@@ -599,7 +629,9 @@ def load_data(root: str, params_json="", convert=True, is_singledelay=True, is_l
         print("User-input parameters:")
         print(json.dumps(params, indent=4))
 
-        valid, error = convert2bids(root, params, img_type, has_structural, is_singledelay, is_labelcontrol)
+        valid, error = convert2bids(
+            root, params, img_type, has_structural, is_singledelay, is_labelcontrol
+        )
         if not valid:
             raise ValueError(error)
         print("Convert complete!")
